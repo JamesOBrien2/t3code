@@ -1,6 +1,7 @@
 import { act, render, type Screen } from "../../test/render";
 import { EnvironmentId } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
+import { page, userEvent } from "vite-plus/test/browser";
 import { StrictMode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -85,4 +86,42 @@ describe("project action editor save lifecycle", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onSubmit.mock.calls.map(([scriptId]) => scriptId)).toEqual(["build", "test"]);
   });
+});
+
+it("switches from shell to prompt, records a shortcut, and saves the prompt editor", async () => {
+  setup();
+  onSubmit.mockResolvedValue(AsyncResult.success(undefined));
+  await using screen = await render(null);
+  await open(screen, {
+    scriptId: null,
+    initial: { ...EMPTY_PROJECT_SCRIPT_INPUT, name: "Research status" },
+  });
+  await expect.element(page.getByLabelText("Command", { exact: true })).toBeVisible();
+  await userEvent.click(page.getByRole("combobox", { name: "Action type" }));
+  await userEvent.click(page.getByRole("option", { name: "Prompt", exact: true }));
+  await expect.element(page.getByLabelText("Command", { exact: true })).not.toBeInTheDocument();
+  await expect
+    .element(page.getByText("Run automatically on worktree creation"))
+    .not.toBeInTheDocument();
+  await userEvent.type(
+    page.getByLabelText("Prompt", { exact: true }),
+    "Read instructions. Report results without edits.",
+  );
+  await userEvent.click(page.getByLabelText("Keybinding", { exact: true }));
+  await userEvent.keyboard("{Control>}{Shift>}p{/Shift}{/Control}");
+  await expect
+    .element(page.getByLabelText("Keybinding", { exact: true }))
+    .toHaveValue("ctrl+shift+p");
+  await act(async () => submit());
+  await vi.waitFor(() =>
+    expect(onSubmit).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({
+        type: "prompt",
+        prompt: "Read instructions. Report results without edits.",
+        name: "Research status",
+        keybinding: "ctrl+shift+p",
+      }),
+    ),
+  );
 });

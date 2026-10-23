@@ -103,6 +103,7 @@ type ThreadGitControlsProps = ThreadGitMenuProps & {
   };
   readonly canOpenTerminal: boolean;
   readonly canOperateTerminal: boolean;
+  readonly canRunPrompt: boolean;
   readonly canOpenFiles: boolean;
   readonly projectScripts: ReadonlyArray<ProjectScript>;
   readonly terminalSessions: ReadonlyArray<TerminalMenuSession>;
@@ -281,8 +282,8 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
       menu: {
         items: [
           ...props.projectScripts.map((script) => ({
-            description: script.command,
-            disabled: !props.canOperateTerminal,
+            description: script.type === "prompt" ? script.prompt : script.command,
+            disabled: script.type === "prompt" ? !props.canRunPrompt : !props.canOperateTerminal,
             icon: { name: projectScriptMenuIcon(script.icon), type: "sfSymbol" as const },
             label: projectScriptMenuLabel(script),
             onPress: () => void props.onRunProjectScript(script),
@@ -450,9 +451,11 @@ export function ThreadGitControls(props: ThreadGitControlsProps) {
               <Toolbar.MenuAction
                 key={script.id}
                 icon={projectScriptMenuIcon(script.icon)}
-                disabled={!props.canOperateTerminal}
+                disabled={
+                  script.type === "prompt" ? !props.canRunPrompt : !props.canOperateTerminal
+                }
                 onPress={() => void props.onRunProjectScript(script)}
-                subtitle={script.command}
+                subtitle={script.type === "prompt" ? script.prompt : script.command}
               >
                 <Toolbar.Label>{projectScriptMenuLabel(script)}</Toolbar.Label>
               </Toolbar.MenuAction>

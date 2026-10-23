@@ -637,7 +637,27 @@ function ThreadRouteContent(
     });
   };
 
+  const runPrompt = useAtomCommand(threadEnvironment.runProjectPrompt, "run prompt action");
   const handleRunProjectScript = async (script: ProjectScript) => {
+    if (script.type === "prompt") {
+      if (
+        !selectedThread ||
+        !readEnvironmentScope(selectedThread.environmentId, AuthOrchestrationOperateScope)
+      )
+        return;
+      await runPrompt({
+        environmentId: selectedThread.environmentId,
+        input: {
+          threadId: selectedThread.id,
+          action: script,
+          creationSource: "mobile",
+          ...(composer.modelSelection ? { modelSelection: composer.modelSelection } : {}),
+          ...(composer.runtimeMode ? { runtimeMode: composer.runtimeMode } : {}),
+          ...(composer.interactionMode ? { interactionMode: composer.interactionMode } : {}),
+        },
+      });
+      return;
+    }
     terminalDebugLog("project-script:press", {
       scriptId: script.id,
       command: script.command,
@@ -726,8 +746,10 @@ function ThreadRouteContent(
     gitStatus: gitStatus.data,
     gitOperationLabel: gitState.gitOperationLabel,
     canOpenTerminal:
-      Boolean(selectedThreadProject?.workspaceRoot) && (canReadTerminal || canOperateTerminal),
+      Boolean(selectedThreadProject?.workspaceRoot) &&
+      (canReadTerminal || canOperateTerminal || canOperateThread),
     canOperateTerminal,
+    canRunPrompt: canOperateThread,
     canOpenFiles: Boolean(selectedThreadProject?.workspaceRoot),
     projectScripts: selectedThreadProject
       ? resolveProjectScripts(
