@@ -475,6 +475,7 @@ export function ThreadGitControls(props: ThreadGitControlsProps) {
             <Toolbar.MenuAction
               key={session.terminalId}
               icon="terminal"
+              disabled={!props.canOpenTerminal}
               onPress={() => props.onOpenTerminal(session.terminalId)}
               subtitle={[
                 getTerminalStatusLabel({
