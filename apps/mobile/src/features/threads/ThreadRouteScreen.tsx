@@ -75,6 +75,7 @@ import { useSelectedThreadGitState } from "../../state/use-selected-thread-git-s
 import { useSelectedThreadRequests } from "../../state/use-selected-thread-requests";
 import { useSelectedThreadWorktree } from "../../state/use-selected-thread-worktree";
 import { useThreadComposerState } from "../../state/use-thread-composer-state";
+import { updateComposerDraftSettings } from "../../state/use-composer-drafts";
 import { resolveMergeBackTargetThreadId } from "@t3tools/client-runtime/state/thread-relationships";
 import { resolveLatestMergeBackRun } from "@t3tools/client-runtime/state/thread-workflows";
 import { threadEnvironment } from "../../state/threads";
@@ -645,7 +646,7 @@ function ThreadRouteContent(
         !readEnvironmentScope(selectedThread.environmentId, AuthOrchestrationOperateScope)
       )
         return;
-      await runPrompt({
+      const result = await runPrompt({
         environmentId: selectedThread.environmentId,
         input: {
           threadId: selectedThread.id,
@@ -656,6 +657,12 @@ function ThreadRouteContent(
           ...(composer.interactionMode ? { interactionMode: composer.interactionMode } : {}),
         },
       });
+      if (result._tag === "Success" && script.modelSelection) {
+        updateComposerDraftSettings(
+          scopedThreadKey(selectedThread.environmentId, selectedThread.id),
+          { modelSelection: script.modelSelection },
+        );
+      }
       return;
     }
     terminalDebugLog("project-script:press", {
