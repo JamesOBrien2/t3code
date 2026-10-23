@@ -40,7 +40,7 @@ import { commandForProjectScript, nextProjectScriptId } from "~/projectScripts";
 import {
   applyProviderInstanceSettings,
   deriveProviderInstanceEntries,
-  resolveDefaultProviderModelSelection,
+  resolveDefaultProviderModelSelectionFromEntries,
   sortProviderInstanceEntries,
 } from "~/providerInstances";
 import { getCustomModelOptionsByInstance } from "~/modelSelection";
@@ -309,7 +309,10 @@ function ProjectScriptEditorForm({
     applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings, projectId),
   );
   const fallbackModelSelection =
-    resolveDefaultProviderModelSelection(providers, settings.defaultModelSelection) ??
+    resolveDefaultProviderModelSelectionFromEntries(
+      instanceEntries,
+      settings.defaultModelSelection,
+    ) ??
     instanceEntries.reduce<ModelSelection | null>((selection, entry) => {
       if (selection || !entry.enabled || !entry.models[0]) return selection;
       return createModelSelection(entry.instanceId, entry.models[0].slug);

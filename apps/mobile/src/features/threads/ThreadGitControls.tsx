@@ -275,7 +275,7 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
   return {
     terminal: {
       accessibilityLabel: "Open terminal",
-      disabled: !props.canOpenTerminal,
+      disabled: !props.canOpenTerminal && !props.canRunPrompt,
       icon: { name: "terminal", type: "sfSymbol" },
       identifier: "thread-right-terminal",
       label: "Terminal",
@@ -302,6 +302,7 @@ function useThreadGitHeaderActionItems(props: ThreadGitControlsProps): ThreadGit
               ]
             : []),
           ...props.terminalSessions.map((session) => ({
+            disabled: !props.canOpenTerminal,
             description: [
               getTerminalStatusLabel({
                 status: session.status,
@@ -443,7 +444,7 @@ export function ThreadGitControls(props: ThreadGitControlsProps) {
         <Toolbar.Menu
           accessibilityLabel="Open terminal"
           icon="terminal"
-          disabled={!props.canOpenTerminal}
+          disabled={!props.canOpenTerminal && !props.canRunPrompt}
           separateBackground
         >
           {props.projectScripts.length > 0 ? (

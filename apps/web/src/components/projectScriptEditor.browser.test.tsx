@@ -214,6 +214,88 @@ it("shows a provider that only the project enables", async () => {
   await expect.element(page.getByRole("button", { name: "Codex Work", exact: true })).toBeVisible();
 });
 
+it("falls back to a project-enabled model when the environment default is disabled", async () => {
+  await setup();
+  onSubmit.mockResolvedValue(AsyncResult.success(undefined));
+  const projectId = ProjectId.make("project-a");
+  const codexInstanceId = ProviderInstanceId.make("codex");
+  const claudeInstanceId = ProviderInstanceId.make("claudeAgent");
+  const providers: ReadonlyArray<ServerProvider> = [
+    {
+      instanceId: codexInstanceId,
+      driver: ProviderDriverKind.make("codex"),
+      displayName: "Codex",
+      enabled: true,
+      installed: true,
+      version: "1.0.0",
+      status: "ready",
+      auth: { status: "authenticated" },
+      checkedAt: "2026-10-23T00:00:00.000Z",
+      models: [
+        { slug: "gpt-5", name: "GPT-5", isCustom: false, isDefault: true, capabilities: null },
+      ],
+      skills: [],
+      slashCommands: [],
+    },
+    {
+      instanceId: claudeInstanceId,
+      driver: ProviderDriverKind.make("claudeAgent"),
+      displayName: "Claude",
+      enabled: true,
+      installed: true,
+      version: "1.0.0",
+      status: "ready",
+      auth: { status: "authenticated" },
+      checkedAt: "2026-10-23T00:00:00.000Z",
+      models: [
+        {
+          slug: "claude-opus-4-8",
+          name: "Claude Opus 4.8",
+          isCustom: false,
+          isDefault: true,
+          capabilities: null,
+        },
+      ],
+      skills: [],
+      slashCommands: [],
+    },
+  ];
+  state.settings = {
+    ...DEFAULT_UNIFIED_SETTINGS,
+    projectSettingsOverrides: {
+      [projectId]: { providerInstances: { [codexInstanceId]: { enabled: false } } },
+    },
+  };
+  await act(async () => appAtomRegistry.set(state.providers, providers));
+  await using screen = await render(null);
+  await open(
+    screen,
+    {
+      scriptId: "review",
+      initial: {
+        ...EMPTY_PROJECT_SCRIPT_INPUT,
+        name: "Review",
+        type: "prompt",
+        prompt: "Review the code.",
+      },
+    },
+    projectId,
+  );
+
+  await userEvent.click(page.getByText("Use the thread's current model"));
+  await expect.element(page.getByRole("button", { name: /Claude Opus 4.8/ })).toBeVisible();
+
+  await act(async () => submit());
+  await vi.waitFor(() =>
+    expect(onSubmit).toHaveBeenCalledWith(
+      "review",
+      expect.objectContaining({
+        modelSelection: { instanceId: claudeInstanceId, model: "claude-opus-4-8" },
+      }),
+    ),
+  );
+});
+
 it("applies and displays an Ultrathink choice in the prompt", async () => {
   await setup();
   onSubmit.mockResolvedValue(AsyncResult.success(undefined));

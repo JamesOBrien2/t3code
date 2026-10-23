@@ -753,8 +753,7 @@ function ThreadRouteContent(
     gitStatus: gitStatus.data,
     gitOperationLabel: gitState.gitOperationLabel,
     canOpenTerminal:
-      Boolean(selectedThreadProject?.workspaceRoot) &&
-      (canReadTerminal || canOperateTerminal || canOperateThread),
+      Boolean(selectedThreadProject?.workspaceRoot) && (canReadTerminal || canOperateTerminal),
     canOperateTerminal,
     canRunPrompt: canOperateThread,
     canOpenFiles: Boolean(selectedThreadProject?.workspaceRoot),
