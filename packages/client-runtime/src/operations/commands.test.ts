@@ -738,6 +738,12 @@ it.effect(
       }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
       expect(launches).toEqual([]);
       expect(commands).toHaveLength(4);
+      expect(commands.map((command) => command.commandId)).toEqual([
+        "project-prompt:model-selection",
+        "project-prompt:runtime-mode",
+        "project-prompt:interaction-mode",
+        "project-prompt",
+      ]);
       expect(commands[0]).toMatchObject({
         type: "thread.model-selection.set",
         modelSelection: selectedModel,

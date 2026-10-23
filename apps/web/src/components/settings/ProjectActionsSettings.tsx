@@ -203,6 +203,7 @@ export function ProjectActionsSettings() {
         <ProjectScriptEditorDialog
           environmentId={target.environmentId}
           editScope={AuthSettingsWriteScope}
+          projectId={target.projectId ?? null}
           request={request}
           scripts={scripts}
           onSubmit={submit}

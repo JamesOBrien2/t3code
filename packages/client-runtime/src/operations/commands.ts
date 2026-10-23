@@ -786,18 +786,32 @@ export const runProjectPrompt = Effect.fn("EnvironmentCommands.runProjectPrompt"
     input.action.modelSelection ?? input.modelSelection ?? current.modelSelection;
   const runtimeMode = input.runtimeMode ?? current.runtimeMode;
   const interactionMode = input.interactionMode ?? current.interactionMode;
+  const dispatchCommandId = yield* allocateCommandId(input);
   if (!modelSelectionsEqual(modelSelection, current.modelSelection)) {
-    yield* updateThreadMetadata({ ...input, modelSelection });
+    yield* updateThreadMetadata({
+      commandId: CommandId.make(`${dispatchCommandId}:model-selection`),
+      threadId: input.threadId,
+      modelSelection,
+    });
   }
   if (runtimeMode !== current.runtimeMode) {
-    yield* setThreadRuntimeMode({ ...input, runtimeMode });
+    yield* setThreadRuntimeMode({
+      commandId: CommandId.make(`${dispatchCommandId}:runtime-mode`),
+      threadId: input.threadId,
+      runtimeMode,
+    });
   }
   if (interactionMode !== current.interactionMode) {
-    yield* setThreadInteractionMode({ ...input, interactionMode });
+    yield* setThreadInteractionMode({
+      commandId: CommandId.make(`${dispatchCommandId}:interaction-mode`),
+      threadId: input.threadId,
+      interactionMode,
+    });
   }
   const crypto = yield* Crypto.Crypto;
   return yield* startThreadTurn({
     ...input,
+    commandId: dispatchCommandId,
     modelSelection,
     message: {
       messageId: MessageId.make(yield* crypto.randomUUIDv4().pipe(Effect.orDie)),

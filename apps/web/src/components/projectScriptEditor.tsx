@@ -3,6 +3,7 @@ import {
   AuthSettingsWriteScope,
   type EnvironmentId,
   type ModelSelection,
+  type ProjectId,
   type ProjectScript,
   type ProjectScriptIcon,
   type ResolvedKeybindingsConfig,
@@ -47,7 +48,7 @@ import { useEnvironmentSettings } from "~/hooks/useSettings";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "~/state/server";
 import { readEnvironmentScope, useEnvironmentScope } from "~/state/session";
 import { ProviderModelPicker } from "./chat/ProviderModelPicker";
-import { TraitsPicker } from "./chat/TraitsPicker";
+import { readPromptUltrathink, TraitsPicker } from "./chat/TraitsPicker";
 import { useComposerMenuState } from "./chat/useComposerMenuState";
 import {
   AlertDialog,
@@ -161,6 +162,7 @@ export function editorRequestForScript(
 export function ProjectScriptEditorDialog({
   environmentId,
   editScope = AuthOrchestrationOperateScope,
+  projectId,
   request,
   scripts,
   onSubmit,
@@ -169,6 +171,7 @@ export function ProjectScriptEditorDialog({
 }: {
   environmentId: EnvironmentId;
   editScope?: typeof AuthOrchestrationOperateScope | typeof AuthSettingsWriteScope;
+  projectId: ProjectId | null;
   request: ProjectScriptEditorRequest | null;
   scripts: ReadonlyArray<ProjectScript>;
   onSubmit: (
@@ -210,6 +213,7 @@ export function ProjectScriptEditorDialog({
           <ProjectScriptEditorForm
             environmentId={environmentId}
             editScope={editScope}
+            projectId={projectId}
             request={request}
             scripts={scripts}
             validationError={validationError}
@@ -258,6 +262,7 @@ export function ProjectScriptEditorDialog({
 function ProjectScriptEditorForm({
   environmentId,
   editScope,
+  projectId,
   request,
   scripts,
   validationError,
@@ -268,6 +273,7 @@ function ProjectScriptEditorForm({
 }: {
   environmentId: EnvironmentId;
   editScope: typeof AuthOrchestrationOperateScope | typeof AuthSettingsWriteScope;
+  projectId: ProjectId | null;
   request: ProjectScriptEditorRequest | null;
   scripts: ReadonlyArray<ProjectScript>;
   validationError: string | null;
@@ -300,7 +306,7 @@ function ProjectScriptEditorForm({
   const providers =
     useAtomValue(serverEnvironment.providersValueAtom(environmentId)) ?? EMPTY_SERVER_PROVIDERS;
   const instanceEntries = sortProviderInstanceEntries(
-    applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings, null),
+    applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings, projectId),
   );
   const fallbackModelSelection =
     resolveDefaultProviderModelSelection(providers, settings.defaultModelSelection) ??
@@ -606,6 +612,8 @@ function ProjectScriptEditorForm({
                             instanceId={effectiveModelSelection.instanceId}
                             models={activeEntry.models}
                             model={effectiveModelSelection.model}
+                            promptUltrathink={readPromptUltrathink(prompt)}
+                            onPromptEdit={(edit) => setPrompt((current) => edit(current))}
                             modelOptions={effectiveModelSelection.options}
                             planModeEnabled={settings.planModeEnabled}
                             onModelOptionsChange={(options) =>
