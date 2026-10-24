@@ -1404,6 +1404,12 @@ function ThreadSettingsModelsScreen() {
             }
             title="Model filters"
           >
+            <Toolbar.MenuAction
+              isOn={session.providerFilter === FAVORITES_PROVIDER_FILTER}
+              onPress={() => session.setProviderFilter(FAVORITES_PROVIDER_FILTER)}
+            >
+              Favorites
+            </Toolbar.MenuAction>
             <Toolbar.Menu title="Provider">
               <Toolbar.Label>Provider</Toolbar.Label>
               <Toolbar.MenuAction
@@ -1411,12 +1417,6 @@ function ThreadSettingsModelsScreen() {
                 onPress={() => session.setProviderFilter(null)}
               >
                 All providers
-              </Toolbar.MenuAction>
-              <Toolbar.MenuAction
-                isOn={session.providerFilter === FAVORITES_PROVIDER_FILTER}
-                onPress={() => session.setProviderFilter(FAVORITES_PROVIDER_FILTER)}
-              >
-                Favorites
               </Toolbar.MenuAction>
               {session.providerGroups.map((group) => (
                 <Toolbar.MenuAction
