@@ -159,7 +159,11 @@ vi.mock(import("~/browser/browserViewportActions"), { spy: true });
 import { useComposerDraftStore } from "~/composerDraftStore";
 import { useBrowserPointerStore } from "~/browser/browserPointerStore";
 import { previewRuntimeTabId } from "~/browser/previewRuntimeTabId";
-import { usePreviewMiniPlayerStore } from "~/previewMiniPlayerStore";
+import {
+  browserMiniPlayerSource,
+  selectThreadPreviewMiniPlayerTabId,
+  usePreviewMiniPlayerStore,
+} from "~/previewMiniPlayerStore";
 import { dispatchPreviewAction } from "./previewActionBus";
 import { PreviewView } from "./PreviewView";
 
@@ -285,5 +289,26 @@ describe("PreviewView", () => {
     await expect.element(address).not.toHaveFocus();
     act(() => dispatchPreviewAction("focus-url"));
     await expect.element(address).toHaveFocus();
+  });
+
+  it("turns off the floating preview from the chrome picture-in-picture button", async () => {
+    setup();
+    usePreviewMiniPlayerStore.getState().open(TEST_THREAD_REF, browserMiniPlayerSource("tab-1"));
+    expect(
+      selectThreadPreviewMiniPlayerTabId(
+        usePreviewMiniPlayerStore.getState().byThreadKey,
+        TEST_THREAD_REF,
+      ),
+    ).toBe("tab-1");
+
+    await using _screen = await render(view());
+    await userEvent.click(page.getByRole("button", { name: "Close floating preview" }));
+
+    expect(
+      selectThreadPreviewMiniPlayerTabId(
+        usePreviewMiniPlayerStore.getState().byThreadKey,
+        TEST_THREAD_REF,
+      ),
+    ).toBeNull();
   });
 });
