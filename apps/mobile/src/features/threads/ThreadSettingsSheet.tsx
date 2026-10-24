@@ -1239,14 +1239,23 @@ function ThreadSettingsModelsScreen() {
     title: "Model filters",
     items: [
       {
+        type: "action" as const,
+        title: "Favorites",
+        state:
+          session.providerFilter === FAVORITES_PROVIDER_FILTER ? ("on" as const) : ("off" as const),
+        onPress: () => session.setProviderFilter(FAVORITES_PROVIDER_FILTER),
+      },
+      {
         type: "submenu" as const,
         title: "Provider",
-        items: providerFilters.map((filter) => ({
-          type: "action" as const,
-          title: filter.title,
-          state: session.providerFilter === filter.value ? ("on" as const) : ("off" as const),
-          onPress: () => session.setProviderFilter(filter.value),
-        })),
+        items: providerFilters
+          .filter((filter) => filter.value !== FAVORITES_PROVIDER_FILTER)
+          .map((filter) => ({
+            type: "action" as const,
+            title: filter.title,
+            state: session.providerFilter === filter.value ? ("on" as const) : ("off" as const),
+            onPress: () => session.setProviderFilter(filter.value),
+          })),
       },
       ...(session.hasLegacyModels
         ? [
@@ -1271,12 +1280,19 @@ function ThreadSettingsModelsScreen() {
                 title="Model filters"
                 actions={[
                   {
+                    id: "favorites",
+                    title: "Favorites",
+                    state: session.providerFilter === FAVORITES_PROVIDER_FILTER ? "on" : "off",
+                  },
+                  {
                     title: "Provider",
-                    subactions: providerFilters.map((filter) => ({
-                      id: filter.id,
-                      title: filter.title,
-                      state: session.providerFilter === filter.value ? "on" : "off",
-                    })),
+                    subactions: providerFilters
+                      .filter((filter) => filter.value !== FAVORITES_PROVIDER_FILTER)
+                      .map((filter) => ({
+                        id: filter.id,
+                        title: filter.title,
+                        state: session.providerFilter === filter.value ? "on" : "off",
+                      })),
                   },
                   ...(session.hasLegacyModels
                     ? [
@@ -1291,6 +1307,8 @@ function ThreadSettingsModelsScreen() {
                 onPressAction={({ nativeEvent }) => {
                   if (nativeEvent.event === "show-legacy") {
                     session.setShowLegacy(!session.showLegacy);
+                  } else if (nativeEvent.event === "favorites") {
+                    session.setProviderFilter(FAVORITES_PROVIDER_FILTER);
                   } else {
                     const filter = providerFilters.find((item) => item.id === nativeEvent.event);
                     if (filter) session.setProviderFilter(filter.value);
