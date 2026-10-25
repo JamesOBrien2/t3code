@@ -76,6 +76,81 @@ function createList(bundle: string) {
   };
 }
 
+function createEndMaintenance(bundle: string) {
+  const source = NodeFS.readFileSync(
+    new URL(`../apps/mobile/node_modules/@legendapp/list/${bundle}`, import.meta.url),
+    "utf8",
+  );
+  const start = source.indexOf("function doMaintainScrollAtEnd(");
+  const end = source.indexOf("// src/utils/requestAdjust.ts", start);
+  const frames: Array<() => void> = [];
+  const scrollToEnd = vi.fn();
+  const state = {
+    props: { maintainScrollAtEnd: { animated: false } as { animated: boolean } | undefined },
+    didContainersLayout: true,
+    isUserDragging: false,
+    isMomentumScrolling: false,
+    scroll: 400,
+    scrollLength: 800,
+    maintainingScrollAtEnd: undefined as string | undefined,
+    pendingMaintainScrollAtEnd: false,
+    refScroller: { current: { scrollToEnd } },
+  };
+  const maintain = NodeVM.runInNewContext(`${source.slice(start, end)}\ndoMaintainScrollAtEnd`, {
+    requestAnimationFrame: (callback: () => void) => frames.push(callback),
+    getContentSize: () => 1200,
+    getContentInsetStartAdjustment: () => 0,
+    peek$: () => true,
+    setTimeout: vi.fn(),
+  }) as (ctx: { state: typeof state }) => boolean;
+  return {
+    state,
+    scrollToEnd,
+    maintain: () => maintain({ state }),
+    flush: () => {
+      for (const frame of frames.splice(0)) frame();
+    },
+  };
+}
+
+describe.each(["react-native.js", "react-native.mjs"])("end maintenance (%s)", (bundle) => {
+  it("cancels a queued end scroll when following is disabled before the next frame", () => {
+    const list = createEndMaintenance(bundle);
+    list.maintain();
+    list.state.props.maintainScrollAtEnd = undefined;
+    list.flush();
+    expect(list.scrollToEnd).not.toHaveBeenCalled();
+    expect(list.state.maintainingScrollAtEnd).toBeUndefined();
+    expect(list.state.pendingMaintainScrollAtEnd).toBe(false);
+  });
+
+  it.each(["isUserDragging", "isMomentumScrolling"] as const)(
+    "does not pull a reader to the end during %s",
+    (phase) => {
+      const list = createEndMaintenance(bundle);
+      list.maintain();
+      list.state[phase] = true;
+      list.flush();
+      expect(list.scrollToEnd).not.toHaveBeenCalled();
+      expect(list.state.maintainingScrollAtEnd).toBeUndefined();
+      expect(list.maintain()).toBe(false);
+      list.flush();
+      expect(list.scrollToEnd).not.toHaveBeenCalled();
+      list.state[phase] = false;
+      list.maintain();
+      list.flush();
+      expect(list.scrollToEnd).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("continues following a measured end while idle", () => {
+    const list = createEndMaintenance(bundle);
+    list.maintain();
+    list.flush();
+    expect(list.scrollToEnd).toHaveBeenCalledWith({ animated: false });
+  });
+});
+
 describe.each(["react-native.js", "react-native.mjs"])(
   "initial inset end reveal (%s)",
   (bundle) => {

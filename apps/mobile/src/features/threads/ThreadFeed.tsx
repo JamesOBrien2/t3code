@@ -4,11 +4,7 @@ import { useOpenPullRequest } from "../../native/useOpenPullRequest";
 import { useWorkspaceSettledContentWidth } from "../layout/workspace-content-width";
 import { ThreadMarkdownVideo, ThreadMediaVisibleContext } from "./ThreadMarkdownVideo";
 import { useMarkdownImageSource } from "../../native/useMarkdownImageSource";
-import {
-  enrichedContextLinkCustomization,
-  enrichedThreadLinkCustomization,
-  withChipIcon,
-} from "../../native/useEnrichedLinkVariants";
+import { enrichedContextLinkCustomization } from "../../native/useEnrichedLinkVariants";
 import {
   enrichedSkillDisplayName,
   enrichedSkillInstructionsPath,
@@ -100,7 +96,6 @@ import {
   useRef,
   useState,
   useId,
-  type ComponentPropsWithRef,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -129,7 +124,6 @@ import { FilePreviewModal, type FilePreviewSource } from "../../components/FileP
 import { isPdfFile } from "../../lib/filePreview";
 import { flattenThemeColor } from "../../lib/mobileTheme";
 import { PresentationSource } from "../../components/ui/NativePresentation";
-import { NativeScrollViewMarker } from "../../native/NativeScrollViewMarker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeIn, FadeInUp, type SharedValue } from "react-native-reanimated";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
@@ -188,9 +182,11 @@ import {
 } from "../../lib/appearancePreferences";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { PierreEntryIcon } from "../../components/PierreEntryIcon";
+import { markdownLinkIconSource } from "../../lib/markdownLinkIcons";
 import {
   normalizeNativeMarkdownUrl,
   resolveMarkdownInlineCodePresentation,
+  resolveMarkdownLinkIcon,
   resolveMarkdownLinkPresentation,
 } from "../../lib/markdownLinks";
 import {
@@ -203,7 +199,6 @@ import {
   isSecretRequestActivityGroup,
   type ThreadFeedEntry,
   type ThreadFeedLatestRun,
-  messageFoldRunId,
 } from "../../lib/threadActivity";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
 import {
@@ -245,11 +240,7 @@ import {
   pickWorkspaceBasenameMatch,
   WORKSPACE_BASENAME_LOOKUP_LIMIT,
 } from "@t3tools/client-runtime/workspace-basename-lookup";
-import {
-  useLiveThreadLinkLabels,
-  useQuietThreadShell,
-  useThreadChipIcons,
-} from "../../state/entities";
+import { useLiveThreadLinkLabels, useQuietThreadShell } from "../../state/entities";
 import { useThreadSelection } from "../../state/use-thread-selection";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
@@ -270,7 +261,6 @@ import { waitForThreadShellReady } from "./threadForkNavigation";
 import { resolveUserMessageIntentBadge } from "./userMessageIntentBadge";
 import { fileChipClipboardPath, fileChipMenu, resolveFileChipTarget } from "./fileChipMenu";
 import { useFileChipShare } from "./useFileChipShare";
-import { useOpenLinkedThread } from "./useOpenLinkedThread";
 import {
   MarkdownImageAvailableWidthContext,
   ThreadMarkdownImage,
@@ -327,8 +317,6 @@ export interface ThreadFeedHistoryControls {
   readonly loading: boolean;
   readonly error: string | null;
   readonly onLoadEarlier: () => void;
-  /** Loads earlier history down to the entry, in one request. */
-  readonly onLoadThrough: (entryId: string) => void;
 }
 
 export interface ThreadFeedProps {
@@ -351,9 +339,6 @@ export interface ThreadFeedProps {
   readonly listRef: RefObject<LegendListRef | null>;
   readonly freeze: SharedValue<boolean>;
   readonly anchorMessageId: MessageId | null;
-  /** A message to scroll to once it is in the feed; see `onJumpedToMessage`. */
-  readonly jumpToMessageId?: MessageId | null;
-  readonly onJumpedToMessage?: () => void;
   readonly submittedMessageId: MessageId | null;
   readonly contentInsetEndAdjustment: SharedValue<number>;
   readonly keyboardOffset: number;
@@ -766,16 +751,6 @@ function MessageAttachmentUnknown(props: { readonly name: string }) {
 // LegendList only computes hook visibility when the list has a viewability config.
 const THREAD_MEDIA_VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 0 };
 
-// The composer and overlays beside the feed keep UIKit from finding it on its own, so
-// register it with the screen controller. Header minimization observes this scroll view.
-function ThreadFeedScrollView(props: ComponentPropsWithRef<typeof Animated.ScrollView>) {
-  return (
-    <NativeScrollViewMarker style={{ flex: 1 }}>
-      <Animated.ScrollView {...props} />
-    </NativeScrollViewMarker>
-  );
-}
-
 function ThreadMediaVisibility(props: { readonly children: ReactNode }) {
   const [visible, setVisible] = useState(false);
   useViewabilityAmount<ThreadFeedEntry>(
@@ -871,12 +846,6 @@ const AssistantMarkdownContent = memo(function AssistantMarkdownContent(props: {
 }) {
   const liveMarkdown = useLiveThreadLinkLabels(props.markdown, props.environmentId);
   const segments = useMemo(() => splitCodexArtifactTemplateMarkdown(liveMarkdown), [liveMarkdown]);
-  const threadIcons = useThreadChipIcons(props.environmentId, liveMarkdown);
-  const linkHandlers: MarkdownLinkHandlers = {
-    ...props.linkHandlers,
-    linkCustomization: (href) =>
-      withChipIcon(props.linkHandlers.linkCustomization?.(href), threadIcons.get(href)),
-  };
 
   return segments.map((segment) => {
     if (segment.kind === "artifact-template") {
@@ -897,7 +866,7 @@ const AssistantMarkdownContent = memo(function AssistantMarkdownContent(props: {
         markdown={markdown}
         skills={props.skills}
         textStyle={props.markdownStyles.nativeTextStyle}
-        {...linkHandlers}
+        {...props.linkHandlers}
         renderImage={props.renderImage}
       />
     );
@@ -1056,13 +1025,13 @@ function OpenSenderThreadButton(props: {
   readonly environmentId: EnvironmentId;
   readonly senderThreadId: ThreadId;
 }) {
-  const openLinkedThread = useOpenLinkedThread();
+  const navigation = useNavigation();
   return (
     <Pressable
       accessibilityRole="link"
       hitSlop={6}
       onPress={() =>
-        openLinkedThread({
+        navigation.navigate("Thread", {
           environmentId: String(props.environmentId),
           threadId: String(props.senderThreadId),
         })
@@ -1798,10 +1767,8 @@ type UserMessageContentProps = {
 function UserMessageContent(props: UserMessageContentProps) {
   const [selected, setSelected] = useState<{ contextId: string; label: string } | null>(null);
   const navigation = useNavigation();
-  const openLinkedThread = useOpenLinkedThread();
   const { selectedThread } = useThreadSelection();
   const liveText = useLiveThreadLinkLabels(props.text, props.environmentId);
-  const threadIcons = useThreadChipIcons(props.environmentId, liveText, props.context?.records);
   const text = replaceComposerContextReferences(liveText, (ref) => {
     const available = props.context?.records.some((record) => record.contextId === ref.contextId);
     return `[${ref.label}${available ? "" : " (unavailable)"}](t3-context://v1/${ref.kind}/${ref.contextId})`;
@@ -1817,7 +1784,7 @@ function UserMessageContent(props: UserMessageContentProps) {
       return;
     }
     if (record?.kind === "thread" && "threadId" in record) {
-      openLinkedThread({
+      navigation.navigate("Thread", {
         environmentId: String(record.environmentId),
         threadId: String(record.threadId),
       });
@@ -1885,11 +1852,8 @@ function UserMessageContent(props: UserMessageContentProps) {
             }
           },
           linkCustomization: (href) =>
-            withChipIcon(
-              enrichedContextLinkCustomization(href, props.context?.records ?? []) ??
-                props.linkHandlers.linkCustomization?.(href),
-              threadIcons.get(href),
-            ),
+            enrichedContextLinkCustomization(href, props.context?.records ?? []) ??
+            props.linkHandlers.linkCustomization?.(href),
         }}
       />
       {selected ? (
@@ -2028,7 +1992,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   const duoColumns = useNativeWorkspaceColumnsSupported() && isDuoDevice(deviceType);
   const openPullRequest = useOpenPullRequest();
   const navigation = useNavigation();
-  const openLinkedThread = useOpenLinkedThread();
   const onOpenTurnDiff = useCallback(
     (checkpoint: ThreadCheckpointSummary) => {
       setReviewSelectedSectionId(
@@ -2213,7 +2176,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     }
     const target = resolveLinkedThread(href);
     if (target) {
-      openLinkedThread({
+      navigation.navigate("Thread", {
         environmentId: String(target.environmentId),
         threadId: String(target.threadId),
       });
@@ -2348,7 +2311,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   });
   const markdownLinkHandlers: MarkdownLinkHandlers = {
     onLinkPress: onMarkdownLinkPress,
-    linkCustomization: enrichedThreadLinkCustomization,
     onImagePress: (href) => onMarkdownLinkPress(href, true),
     resolveImageSource,
     fileContextMenu: (href) => {
@@ -2630,45 +2592,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       listRef.current?.reportContentInset({ bottom });
     }
   }, [listMountKey, props.contentInsetEndAdjustment, listRef]);
-  // Opening at a message: its run unfolds, the list stops following the end
-  // (a render later, so the end does not pull it back), then it scrolls there.
-  const [loadedListKey, setLoadedListKey] = useState<string | null>(null);
-  const { jumpToMessageId } = props;
-  const finishJump = useEffectEvent(() => props.onJumpedToMessage?.());
-  const stopFollowingEnd = useEffectEvent(() => setEndFollow(false));
-  useEffect(() => {
-    if (!jumpToMessageId || loadedListKey !== listMountKey) return;
-    const index = presentedFeed.findIndex(
-      (entry) => entry.type === "message" && entry.id === jumpToMessageId,
-    );
-    if (index === -1) {
-      const runId = messageFoldRunId(props.feed, jumpToMessageId);
-      if (runId && !expandedTurnIds.has(runId)) {
-        setInteractionState((current) => ({
-          ...current,
-          expandedTurnIds: new Set(current.expandedTurnIds).add(runId),
-        }));
-      } else {
-        finishJump();
-      }
-      return;
-    }
-    if (endFollowEnabled) {
-      stopFollowingEnd();
-      return;
-    }
-    void listRef.current?.scrollToIndex({ index, viewPosition: 0.2, animated: false });
-    finishJump();
-  }, [
-    endFollowEnabled,
-    expandedTurnIds,
-    jumpToMessageId,
-    listMountKey,
-    listRef,
-    loadedListKey,
-    presentedFeed,
-    props.feed,
-  ]);
 
   const reflowLayout = () => ({
     rowsTop: FEED_PADDING_TOP + listHeaderSizeRef.current,
@@ -3054,7 +2977,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             // (facebook/react-native#54123); the anchored end space after a send
             // is pure inset, so without this the blank region can't be scrolled.
             applyWorkaroundForContentInsetHitTestBug
-            {...(Platform.OS === "ios" ? { ScrollViewComponent: ThreadFeedScrollView } : {})}
             // Horizontal Duo reservations are already included in the row padding.
             contentInsetAdjustmentBehavior={
               usesNativeAutomaticInsets
@@ -3135,7 +3057,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             onItemSizeChanged={handleItemSizeChanged}
             drawDistance={500}
             keyboardShouldPersistTaps="always"
-            keyboardDismissMode="none"
+            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
             keyboardLiftBehavior="whenAtEnd"
             // Seed the list's scroll math with the real viewport before its own
             // onLayout: the empty→filled remount can then tell at mount that
@@ -3156,7 +3078,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             initialScrollAtEnd
             onLoad={() => {
               loadedListKeyRef.current = listMountKey;
-              setLoadedListKey(listMountKey);
             }}
             // Row positions start below the header; the reflow anchor converts between them.
             onMetricsChange={(metrics) => {
