@@ -162,10 +162,16 @@ import { previewRuntimeTabId } from "~/browser/previewRuntimeTabId";
 import {
   browserMiniPlayerSource,
   selectThreadPreviewMiniPlayerTabId,
+  selectThreadPreviewMiniPlayer,
   usePreviewMiniPlayerStore,
 } from "~/previewMiniPlayerStore";
 import { dispatchPreviewAction } from "./previewActionBus";
 import { PreviewView } from "./PreviewView";
+import { ThreadPreviewMiniPlayer } from "./ThreadPreviewMiniPlayer";
+import { ChatCanvas } from "../chat/ChatCanvas";
+import { shouldRenderPreviewMiniPlayer } from "../ChatView.logic";
+import { selectSelectedRightPanelSurface, useRightPanelStore } from "~/rightPanelStore";
+import { closePreviewPanel } from "../chat/closePreviewPanel";
 
 const TEST_THREAD_REF = {
   environmentId: EnvironmentId.make("environment-1"),
@@ -223,6 +229,53 @@ function setup() {
 }
 
 describe("PreviewView", () => {
+  it("returns to the same floating preview after docking and closing the panel", async () => {
+    setup();
+    useRightPanelStore.setState({ byThreadKey: {} });
+    const store = usePreviewMiniPlayerStore.getState();
+    store.open(TEST_THREAD_REF, browserMiniPlayerSource("tab-1"));
+    store.resize(TEST_THREAD_REF, "browser:tab-1", 320, { x: 100, y: 150 });
+    const miniPlayer = selectThreadPreviewMiniPlayer(
+      usePreviewMiniPlayerStore.getState().byThreadKey,
+      TEST_THREAD_REF,
+    )!;
+    await using screen = await render(
+      <div style={{ display: "flex", width: 1000, height: 700 }}>
+        <ChatCanvas composerOverlayElement={null}>
+          <ThreadPreviewMiniPlayer threadRef={TEST_THREAD_REF} miniPlayer={miniPlayer} />
+        </ChatCanvas>
+      </div>,
+    );
+    await userEvent.hover(
+      screen
+        .getByRole("region", { name: "Floating browser preview" })
+        .element()
+        .querySelector(".group")!,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Open preview in right panel" }));
+    const docked = selectThreadPreviewMiniPlayer(
+      usePreviewMiniPlayerStore.getState().byThreadKey,
+      TEST_THREAD_REF,
+    );
+    expect(docked).toEqual(miniPlayer);
+    expect(
+      shouldRenderPreviewMiniPlayer(
+        docked?.source ?? null,
+        selectSelectedRightPanelSurface(useRightPanelStore.getState().byThreadKey, TEST_THREAD_REF),
+      ),
+    ).toBe(false);
+    closePreviewPanel(TEST_THREAD_REF);
+    expect(
+      shouldRenderPreviewMiniPlayer(
+        selectThreadPreviewMiniPlayer(
+          usePreviewMiniPlayerStore.getState().byThreadKey,
+          TEST_THREAD_REF,
+        )?.source ?? null,
+        null,
+      ),
+    ).toBe(true);
+  });
+
   it("retains the annotation locally when its own environment loses access during capture", async () => {
     setup();
     const picked = annotation("annotation-revoked");

@@ -229,7 +229,6 @@ function BrowserMiniPlayer({ threadRef, tabId, miniPlayer }: Props & { readonly 
   );
 
   const openInPanel = () => {
-    usePreviewMiniPlayerStore.getState().close(threadRef);
     useRightPanelStore.getState().openBrowser(threadRef, tabId);
   };
 
@@ -373,7 +372,6 @@ function DeviceMiniPlayer({
     resolveDeviceMiniPlayerCornerRadius(source.platform, player);
 
   const openInPanel = () => {
-    usePreviewMiniPlayerStore.getState().close(threadRef);
     useRightPanelStore.getState().openDevice(threadRef, {
       hostId: source.hostId,
       deviceId: source.deviceId,
