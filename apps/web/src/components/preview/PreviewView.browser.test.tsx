@@ -173,6 +173,8 @@ import { createChatCanvasStore } from "../chat/canvasStore";
 import { shouldRenderPreviewMiniPlayer } from "../ChatView.logic";
 import { selectActiveRightPanelSurface, useRightPanelStore } from "~/rightPanelStore";
 import { closePreviewPanel } from "../chat/closePreviewPanel";
+import { useRightPanelActions } from "../chat/useRightPanelActions";
+import { __testing as previewStateTesting } from "~/previewStateStore";
 
 const TEST_THREAD_REF = {
   environmentId: EnvironmentId.make("environment-1"),
@@ -189,6 +191,38 @@ function view(onSendAnnotation?: ComponentProps<typeof PreviewView>["onSendAnnot
       {...(onSendAnnotation ? { onSendAnnotation } : {})}
     />
   );
+}
+
+function PanelCloseAction() {
+  const activeRightPanelSurface = useRightPanelStore((state) =>
+    selectActiveRightPanelSurface(state.byThreadKey, TEST_THREAD_REF),
+  );
+  const { closePreviewPanelStable } = useRightPanelActions({
+    activeThreadRef: TEST_THREAD_REF,
+    activeProject: null,
+    activeRightPanelSurface,
+    activePreviewState: previewStateTesting.EMPTY_THREAD_PREVIEW_STATE,
+    deviceState: {} as Parameters<typeof useRightPanelActions>[0]["deviceState"],
+    pullRequestPanelTarget: null,
+    threadPanelPresentation: "inline",
+    isServerThread: true,
+    isGitRepo: false,
+    browserAvailable: true,
+    canOperatePreview: true,
+    diffOpen: false,
+    previewPanelOpen: true,
+    rightPanelOpen: true,
+    canMaximizeRightPanel: false,
+    rightPanelMaximized: false,
+    supportsPullRequests: false,
+    pullRequestsSurfaceAvailable: false,
+    gitCwd: null,
+    activeProjectCwd: null,
+    explicitDiffOpenRef: { current: null },
+    onDiffPanelOpen: undefined,
+    closeRightPanelSurface: () => {},
+  });
+  return <button onClick={closePreviewPanelStable}>Close panel</button>;
 }
 
 function annotation(id: string, screenshot: unknown = null) {
@@ -230,6 +264,28 @@ function setup() {
 }
 
 describe("PreviewView", () => {
+  it("does not restore a dismissed floating preview when the panel action closes", async () => {
+    setup();
+    useRightPanelStore.setState({ byThreadKey: {} });
+    usePreviewMiniPlayerStore.getState().open(TEST_THREAD_REF, browserMiniPlayerSource("tab-1"));
+    useRightPanelStore.getState().openBrowser(TEST_THREAD_REF, "tab-1");
+    usePreviewMiniPlayerStore.getState().close(TEST_THREAD_REF);
+
+    await using screen = await render(<PanelCloseAction />);
+    await userEvent.click(screen.getByRole("button", { name: "Close panel" }));
+    await vi.waitFor(() => {
+      expect(
+        selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, TEST_THREAD_REF),
+      ).toBeNull();
+      expect(
+        selectThreadPreviewMiniPlayerTabId(
+          usePreviewMiniPlayerStore.getState().byThreadKey,
+          TEST_THREAD_REF,
+        ),
+      ).toBeNull();
+    });
+  });
+
   it("returns to the same floating preview after docking and closing the panel", async () => {
     setup();
     useRightPanelStore.setState({ byThreadKey: {} });
