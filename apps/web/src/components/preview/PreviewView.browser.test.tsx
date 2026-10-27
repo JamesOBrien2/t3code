@@ -241,7 +241,7 @@ describe("PreviewView", () => {
       TEST_THREAD_REF,
     )!;
     await using screen = await render(
-      <div style={{ display: "flex", width: 1000, height: 700 }}>
+      <div className="flex w-[1000px] h-[700px]">
         <ChatCanvas
           store={createChatCanvasStore()}
           threadRef={TEST_THREAD_REF}
@@ -264,32 +264,38 @@ describe("PreviewView", () => {
         .querySelector(".group")!,
     );
     await userEvent.click(screen.getByRole("button", { name: "Open preview in right panel" }));
-    const docked = selectThreadPreviewMiniPlayer(
-      usePreviewMiniPlayerStore.getState().byThreadKey,
-      TEST_THREAD_REF,
-    );
-    expect(docked).toEqual(miniPlayer);
-    expect(
-      shouldRenderPreviewMiniPlayer(
-        docked?.source ?? null,
-        selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, TEST_THREAD_REF),
-      ),
-    ).toBe(false);
+    await vi.waitFor(() => {
+      const docked = selectThreadPreviewMiniPlayer(
+        usePreviewMiniPlayerStore.getState().byThreadKey,
+        TEST_THREAD_REF,
+      );
+      expect(docked).toEqual(miniPlayer);
+      expect(
+        shouldRenderPreviewMiniPlayer(
+          docked?.source ?? null,
+          selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, TEST_THREAD_REF),
+        ),
+      ).toBe(false);
+    });
     closePreviewPanel(TEST_THREAD_REF);
-    const activeSurface = selectActiveRightPanelSurface(
-      useRightPanelStore.getState().byThreadKey,
-      TEST_THREAD_REF,
-    );
-    expect(activeSurface).toBeNull();
-    expect(
-      shouldRenderPreviewMiniPlayer(
-        selectThreadPreviewMiniPlayer(
-          usePreviewMiniPlayerStore.getState().byThreadKey,
-          TEST_THREAD_REF,
-        )?.source ?? null,
-        activeSurface,
-      ),
-    ).toBe(true);
+    await vi.waitFor(() => {
+      const activeSurface = selectActiveRightPanelSurface(
+        useRightPanelStore.getState().byThreadKey,
+        TEST_THREAD_REF,
+      );
+      expect(activeSurface).toBeNull();
+    });
+    await vi.waitFor(() => {
+      expect(
+        shouldRenderPreviewMiniPlayer(
+          selectThreadPreviewMiniPlayer(
+            usePreviewMiniPlayerStore.getState().byThreadKey,
+            TEST_THREAD_REF,
+          )?.source ?? null,
+          selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, TEST_THREAD_REF),
+        ),
+      ).toBe(true);
+    });
   });
 
   it("retains the annotation locally when its own environment loses access during capture", async () => {
@@ -363,21 +369,25 @@ describe("PreviewView", () => {
   it("turns off the floating preview from the chrome picture-in-picture button", async () => {
     setup();
     usePreviewMiniPlayerStore.getState().open(TEST_THREAD_REF, browserMiniPlayerSource("tab-1"));
-    expect(
-      selectThreadPreviewMiniPlayerTabId(
-        usePreviewMiniPlayerStore.getState().byThreadKey,
-        TEST_THREAD_REF,
-      ),
-    ).toBe("tab-1");
+    await vi.waitFor(() => {
+      expect(
+        selectThreadPreviewMiniPlayerTabId(
+          usePreviewMiniPlayerStore.getState().byThreadKey,
+          TEST_THREAD_REF,
+        ),
+      ).toBe("tab-1");
+    });
 
     await using _screen = await render(view());
     await userEvent.click(page.getByRole("button", { name: "Close floating preview" }));
 
-    expect(
-      selectThreadPreviewMiniPlayerTabId(
-        usePreviewMiniPlayerStore.getState().byThreadKey,
-        TEST_THREAD_REF,
-      ),
-    ).toBeNull();
+    await vi.waitFor(() => {
+      expect(
+        selectThreadPreviewMiniPlayerTabId(
+          usePreviewMiniPlayerStore.getState().byThreadKey,
+          TEST_THREAD_REF,
+        ),
+      ).toBeNull();
+    });
   });
 });
