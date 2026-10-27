@@ -169,8 +169,9 @@ import { dispatchPreviewAction } from "./previewActionBus";
 import { PreviewView } from "./PreviewView";
 import { ThreadPreviewMiniPlayer } from "./ThreadPreviewMiniPlayer";
 import { ChatCanvas } from "../chat/ChatCanvas";
+import { createChatCanvasStore } from "../chat/canvasStore";
 import { shouldRenderPreviewMiniPlayer } from "../ChatView.logic";
-import { selectSelectedRightPanelSurface, useRightPanelStore } from "~/rightPanelStore";
+import { selectActiveRightPanelSurface, useRightPanelStore } from "~/rightPanelStore";
 import { closePreviewPanel } from "../chat/closePreviewPanel";
 
 const TEST_THREAD_REF = {
@@ -241,7 +242,17 @@ describe("PreviewView", () => {
     )!;
     await using screen = await render(
       <div style={{ display: "flex", width: 1000, height: 700 }}>
-        <ChatCanvas composerOverlayElement={null}>
+        <ChatCanvas
+          store={createChatCanvasStore()}
+          threadRef={TEST_THREAD_REF}
+          preview={{
+            key: "browser:tab-1",
+            width: miniPlayer.width,
+            position: miniPlayer.position,
+            source: { width: 1024, height: 768 },
+          }}
+          composerOverlayElement={null}
+        >
           <ThreadPreviewMiniPlayer threadRef={TEST_THREAD_REF} miniPlayer={miniPlayer} />
         </ChatCanvas>
       </div>,
@@ -261,17 +272,22 @@ describe("PreviewView", () => {
     expect(
       shouldRenderPreviewMiniPlayer(
         docked?.source ?? null,
-        selectSelectedRightPanelSurface(useRightPanelStore.getState().byThreadKey, TEST_THREAD_REF),
+        selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, TEST_THREAD_REF),
       ),
     ).toBe(false);
     closePreviewPanel(TEST_THREAD_REF);
+    const activeSurface = selectActiveRightPanelSurface(
+      useRightPanelStore.getState().byThreadKey,
+      TEST_THREAD_REF,
+    );
+    expect(activeSurface).toBeNull();
     expect(
       shouldRenderPreviewMiniPlayer(
         selectThreadPreviewMiniPlayer(
           usePreviewMiniPlayerStore.getState().byThreadKey,
           TEST_THREAD_REF,
         )?.source ?? null,
-        null,
+        activeSurface,
       ),
     ).toBe(true);
   });
