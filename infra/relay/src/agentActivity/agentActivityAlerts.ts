@@ -38,10 +38,7 @@ export function rowPhasesChanged(
   const previousRows = new Map(previousAggregate.activities.map((row) => [rowKey(row), row]));
   return nextAggregate.activities.some((row) => {
     const previous = previousRows.get(rowKey(row));
-    return (
-      previous?.phase !== row.phase ||
-      (previous?.runId !== undefined && row.runId !== undefined && previous.runId !== row.runId)
-    );
+    return previous?.phase !== row.phase || (previous?.runId ?? null) !== (row.runId ?? null);
   });
 }
 
@@ -92,7 +89,7 @@ function newlyTerminalRows(
   return nextAggregate.activities.filter((row) => {
     if (row.phase !== "completed" && row.phase !== "failed") return false;
     const previous = previousRows.get(rowKey(row));
-    if (previous?.runId && row.runId && previous.runId !== row.runId) return true;
+    if (previous !== undefined && (previous.runId ?? null) !== (row.runId ?? null)) return true;
     return (
       (includeUnobserved || previous !== undefined) &&
       previous?.phase !== "completed" &&
