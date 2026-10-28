@@ -296,21 +296,34 @@ describe("PreviewView", () => {
       usePreviewMiniPlayerStore.getState().byThreadKey,
       TEST_THREAD_REF,
     )!;
-    await using screen = await render(
-      <div className="flex w-[1000px] h-[700px]">
+    const canvasStore = createChatCanvasStore();
+    function FloatingPreviewHost() {
+      const current = usePreviewMiniPlayerStore((state) =>
+        selectThreadPreviewMiniPlayer(state.byThreadKey, TEST_THREAD_REF),
+      );
+      const surface = useRightPanelStore((state) =>
+        selectActiveRightPanelSurface(state.byThreadKey, TEST_THREAD_REF),
+      );
+      if (!current || !shouldRenderPreviewMiniPlayer(current.source, surface)) return null;
+      return (
         <ChatCanvas
-          store={createChatCanvasStore()}
+          store={canvasStore}
           threadRef={TEST_THREAD_REF}
           preview={{
             key: "browser:tab-1",
-            width: miniPlayer.width,
-            position: miniPlayer.position,
+            width: current.width,
+            position: current.position,
             source: { width: 1024, height: 768 },
           }}
           composerOverlayElement={null}
         >
-          <ThreadPreviewMiniPlayer threadRef={TEST_THREAD_REF} miniPlayer={miniPlayer} />
+          <ThreadPreviewMiniPlayer threadRef={TEST_THREAD_REF} miniPlayer={current} />
         </ChatCanvas>
+      );
+    }
+    await using screen = await render(
+      <div className="flex w-[1000px] h-[700px]">
+        <FloatingPreviewHost />
       </div>,
     );
     await userEvent.hover(
@@ -333,6 +346,9 @@ describe("PreviewView", () => {
         ),
       ).toBe(false);
     });
+    await expect
+      .element(screen.getByRole("region", { name: "Floating browser preview" }))
+      .not.toBeInTheDocument();
     closePreviewPanel(TEST_THREAD_REF);
     await vi.waitFor(() => {
       const activeSurface = selectActiveRightPanelSurface(
@@ -352,6 +368,9 @@ describe("PreviewView", () => {
         ),
       ).toBe(true);
     });
+    await expect
+      .element(screen.getByRole("region", { name: "Floating browser preview" }))
+      .toBeInTheDocument();
   });
 
   it("retains the annotation locally when its own environment loses access during capture", async () => {
