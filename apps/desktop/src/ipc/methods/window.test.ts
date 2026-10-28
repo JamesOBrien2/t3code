@@ -83,6 +83,38 @@ const bootstrapsLayer = (instances: ReadonlyArray<DesktopBackendManager.DesktopB
   Layer.merge(DesktopBackendPool.layerTest([...instances]), backendConfigurationLayer);
 
 describe("getLocalEnvironmentBootstraps", () => {
+  it.effect(
+    "marks an existing server without exposing its session or an invalid launch token",
+    () =>
+      Effect.gen(function* () {
+        const result = yield* getLocalEnvironmentBootstraps.handler();
+        assert.deepEqual(result, [
+          {
+            id: "primary",
+            label: "WSL (Ubuntu)",
+            runningDistro: "Ubuntu",
+            httpBaseUrl: "http://127.0.0.1:3774/",
+            wsBaseUrl: "ws://127.0.0.1:3774/",
+            externallyManaged: true,
+          },
+        ]);
+      }).pipe(
+        Effect.provide(
+          bootstrapsLayer([
+            {
+              ...defaultWslInstance,
+              id: DesktopBackendManager.PRIMARY_INSTANCE_ID,
+              label: Effect.succeed("Local"),
+              currentConfig: Effect.succeedSome({
+                ...readyWslConfig,
+                externalServer: { token: "private-session" },
+              }),
+            },
+          ]),
+        ),
+      ),
+  );
+
   it.effect("hands out the current window's token to a backend launched with the secret", () =>
     Effect.gen(function* () {
       const result = yield* getLocalEnvironmentBootstraps.handler();

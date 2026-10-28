@@ -1,5 +1,10 @@
 # Running T3 Code in the background
 
+The desktop app connects automatically to a running server using the same T3 home and server
+version. Closing the app leaves that server and its agents running. Manage the server's network
+settings where you started it. If its version differs from the app's, update or stop the server
+before reopening the app.
+
 On Linux and macOS, T3 Code can run as a service for your user so you do not need
 to keep a terminal open.
 

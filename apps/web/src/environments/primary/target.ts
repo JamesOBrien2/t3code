@@ -83,6 +83,13 @@ function getDesktopLocalEnvironmentBootstrap(): DesktopEnvironmentBootstrap | nu
   return bootstraps.find((entry) => entry.id === PRIMARY_LOCAL_ENVIRONMENT_ID) ?? null;
 }
 
+export function isDesktopPrimaryExternallyManaged(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    getDesktopLocalEnvironmentBootstrap()?.externallyManaged === true
+  );
+}
+
 function parseTargetUrl(input: {
   readonly rawValue: string;
   readonly baseUrl?: string;

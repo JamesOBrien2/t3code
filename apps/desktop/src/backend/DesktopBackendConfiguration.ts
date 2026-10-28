@@ -528,6 +528,7 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
         "3",
       ],
       entryPath: environment.backendEntryPath,
+      stateDir: environment.stateDir,
       cwd: environment.backendCwd,
       env: {
         ...backendChildEnvPatch(),

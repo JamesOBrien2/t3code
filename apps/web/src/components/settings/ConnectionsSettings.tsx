@@ -95,6 +95,7 @@ import {
 } from "~/state/desktopNetworkAccess";
 import { desktopWslStateAtom, refreshDesktopWslState } from "~/state/desktopWslState";
 import { useDesktopUpdateState } from "~/state/desktopUpdate";
+import { isDesktopPrimaryExternallyManaged } from "~/environments/primary/target";
 import {
   type EnvironmentPresentation,
   useEnvironments,
@@ -283,7 +284,8 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
   const canReadRelay = useEnvironmentScope(primaryEnvironmentId, AuthRelayReadScope);
   const canMaintain = useEnvironmentScope(primaryEnvironmentId, AuthEnvironmentMaintainScope);
   const canManageRelay = useEnvironmentScope(primaryEnvironmentId, AuthRelayWriteScope);
-  const canManageLocalBackend = !isLocalEnvironmentDisabled() && canMaintain;
+  const externallyManaged = isDesktopPrimaryExternallyManaged();
+  const canManageLocalBackend = !isLocalEnvironmentDisabled() && canMaintain && !externallyManaged;
   const showsAccess = view === "access";
   const authAccessChanges = useEnvironmentQuery(
     showsAccess && canReadAccess && primaryEnvironmentId !== null
@@ -989,13 +991,15 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
     <SettingsRow
       title={searchableSetting("network-access").title}
       description={
-        desktopBridge
-          ? "This connection cannot view or change network exposure."
-          : currentAuthPolicy === "remote-reachable"
-            ? "Remote access is already configured. Change network exposure where the server starts."
-            : currentAuthPolicy === "loopback-browser"
-              ? "Only this machine can connect. Restart with a non-loopback host for remote pairing."
-              : "Network exposure information is unavailable."
+        externallyManaged
+          ? "Connected to a server started separately. Manage network access where you started that server."
+          : desktopBridge
+            ? "This connection cannot view or change network exposure."
+            : currentAuthPolicy === "remote-reachable"
+              ? "Remote access is already configured. Change network exposure where the server starts."
+              : currentAuthPolicy === "loopback-browser"
+                ? "Only this machine can connect. Restart with a non-loopback host for remote pairing."
+                : "Network exposure information is unavailable."
       }
       control={
         !desktopBridge &&
@@ -1067,6 +1071,12 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
               ) : null
             }
           >
+            {externallyManaged ? (
+              <SettingsRow
+                title="Existing server"
+                description="This app is connected to a server you started separately. Closing the app leaves that server and its agents running."
+              />
+            ) : null}
             {canManageLocalBackend ? (
               <SettingsRow
                 title="Version"
@@ -1120,7 +1130,7 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
                   <CloudLinkRow canReadRelay={canReadRelay} canManageRelay={canManageRelay} />
                 ) : null}
               </>
-            ) : canManageLocalBackend ? (
+            ) : canManageLocalBackend || externallyManaged ? (
               <>
                 {renderDisabledNetworkAccessRow()}
                 {canReadRelay || canManageRelay ? (

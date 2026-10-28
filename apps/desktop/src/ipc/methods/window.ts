@@ -138,12 +138,15 @@ export const getLocalEnvironmentBootstraps = DesktopIpc.makeSyncIpcMethod({
         runningDistro,
         httpBaseUrl: httpBaseUrl.href,
         wsBaseUrl: toWebSocketBaseUrl(httpBaseUrl),
+        ...(config.value.externalServer === undefined ? {} : { externallyManaged: true }),
         // Use the current window's derived token; the launch config's token may be stale.
-        ...(bootstrap.desktopBootstrapSecret
-          ? { bootstrapToken: yield* configuration.currentBootstrapToken }
-          : bootstrap.desktopBootstrapToken
-            ? { bootstrapToken: bootstrap.desktopBootstrapToken }
-            : {}),
+        ...(config.value.externalServer !== undefined
+          ? {}
+          : bootstrap.desktopBootstrapSecret
+            ? { bootstrapToken: yield* configuration.currentBootstrapToken }
+            : bootstrap.desktopBootstrapToken
+              ? { bootstrapToken: bootstrap.desktopBootstrapToken }
+              : {}),
       });
     }
     return bootstraps;

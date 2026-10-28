@@ -28,10 +28,10 @@ import {
 } from "../cloud/serviceProtocol.ts";
 import * as ServiceLauncherClient from "../cloud/serviceLauncherClient.ts";
 import {
-  makePersistedServerRuntimeState,
   persistServerRuntimeState,
   type PersistedServerRuntimeState,
-} from "../serverRuntimeState.ts";
+} from "@t3tools/shared/serverRuntimeState";
+import { makePersistedServerRuntimeState } from "../serverRuntimeState.ts";
 import { DevServerNotProxiableError, resolveTailscaleLocalTarget } from "./pair.ts";
 
 import packageJson from "../../package.json" with { type: "json" };

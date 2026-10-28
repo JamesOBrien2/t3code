@@ -34,7 +34,7 @@ import {
   persistServerRuntimeState,
   readPersistedServerRuntimeState,
   type PersistedServerRuntimeState,
-} from "./serverRuntimeState.ts";
+} from "@t3tools/shared/serverRuntimeState";
 
 export class ServerAlreadyRunningError extends Schema.TaggedError<ServerAlreadyRunningError>()(
   "ServerAlreadyRunningError",

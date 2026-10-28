@@ -14,7 +14,8 @@ import { ServiceLauncherHostProcess } from "./cloud/serviceLauncherClient.ts";
 import { SERVICE_LAUNCHER_CONTEXT_ENV } from "./cloud/serviceProtocol.ts";
 import * as ProcessRunner from "./processRunner.ts";
 import * as ServerOwnership from "./serverOwnership.ts";
-import * as ServerRuntimeState from "./serverRuntimeState.ts";
+import * as ServerRuntimeState from "@t3tools/shared/serverRuntimeState";
+import { makePersistedServerRuntimeState } from "./serverRuntimeState.ts";
 
 const startBesideBootService = Effect.fn("test.startBesideBootService")(function* (input: {
   readonly platform: "darwin" | "linux";
@@ -139,7 +140,7 @@ describe("server ownership", () => {
     ),
     Layer.succeed(HostProcess.Environment, {}),
   ).pipe(Layer.provideMerge(NodeServices.layer));
-  const makeState = ServerRuntimeState.makePersistedServerRuntimeState({
+  const makeState = makePersistedServerRuntimeState({
     config: { host: undefined, devUrl: undefined },
     port: 3773,
   });

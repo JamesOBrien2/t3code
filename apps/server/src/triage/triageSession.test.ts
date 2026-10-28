@@ -5,10 +5,8 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
 import packageJson from "../../package.json" with { type: "json" };
-import {
-  makePersistedServerRuntimeState,
-  persistServerRuntimeState,
-} from "../serverRuntimeState.ts";
+import { persistServerRuntimeState } from "@t3tools/shared/serverRuntimeState";
+import { makePersistedServerRuntimeState } from "../serverRuntimeState.ts";
 import { describeServerProcess } from "./triageSession.ts";
 
 it.effect("reports the version the running server recorded, not the CLI's", () =>

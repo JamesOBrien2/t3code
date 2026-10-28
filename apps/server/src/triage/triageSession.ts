@@ -11,7 +11,10 @@ import * as Path from "effect/Path";
 
 import * as BootService from "../cloud/bootService.ts";
 import type * as ServerConfig from "../config.ts";
-import { isProcessAlive, readPersistedServerRuntimeState } from "../serverRuntimeState.ts";
+import {
+  isProcessAlive,
+  readPersistedServerRuntimeState,
+} from "@t3tools/shared/serverRuntimeState";
 import {
   buildTriageContext,
   buildTriageSeedPrompt,

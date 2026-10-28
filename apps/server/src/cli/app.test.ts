@@ -20,7 +20,7 @@ import { Command } from "effect/cli";
 import { describe, expect } from "vite-plus/test";
 
 import { makeCli } from "../binCli.ts";
-import { PersistedServerRuntimeState } from "../serverRuntimeState.ts";
+import { PersistedServerRuntimeState } from "@t3tools/shared/serverRuntimeState";
 
 const liveProcess = Effect.acquireRelease(
   Effect.promise(async () => {

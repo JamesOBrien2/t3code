@@ -37,6 +37,37 @@ const config = {
 };
 
 describe("DesktopLocalEnvironmentAuth", () => {
+  it.effect("uses the existing server session without exchanging a desktop launch token", () =>
+    Effect.gen(function* () {
+      const auth = yield* DesktopLocalEnvironmentAuth.DesktopLocalEnvironmentAuth;
+      assert.equal(yield* auth.getBearerToken, "existing-server-token");
+    }).pipe(
+      Effect.provide(
+        DesktopLocalEnvironmentAuth.layer.pipe(
+          Layer.provide(
+            Layer.mergeAll(
+              Layer.succeed(DesktopBackendPool.DesktopBackendPool, {
+                list: Effect.succeed([
+                  {
+                    id: PRIMARY_LOCAL_ENVIRONMENT_ID,
+                    currentConfig: Effect.succeedSome({
+                      ...config,
+                      externalServer: { token: "existing-server-token" },
+                    }),
+                  },
+                ]),
+              } as unknown as DesktopBackendPool.DesktopBackendPool["Service"]),
+              Layer.succeed(
+                HttpClient.HttpClient,
+                HttpClient.make(() => Effect.die("unexpected token exchange")),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
   it.effect("exchanges the desktop bootstrap credential only once", () =>
     Effect.gen(function* () {
       const requestCount = yield* Ref.make(0);

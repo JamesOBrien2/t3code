@@ -29,7 +29,7 @@ import { Argument, Command, Flag, GlobalFlag } from "effect/cli";
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
 import { mcpToolSession, type McpToolSession } from "../mcp/AcpMcpStdioBridge.ts";
-import { readPersistedServerRuntimeState } from "../serverRuntimeState.ts";
+import { readPersistedServerRuntimeState } from "@t3tools/shared/serverRuntimeState";
 import { projectLocationFlags, resolveCliAuthConfig } from "./config.ts";
 
 /**

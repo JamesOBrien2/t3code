@@ -8,6 +8,8 @@ import * as Schema from "effect/Schema";
 
 import * as DesktopLifecycle from "../../app/DesktopLifecycle.ts";
 import * as DesktopServerExposure from "../../backend/DesktopServerExposure.ts";
+import * as DesktopBackendPool from "../../backend/DesktopBackendPool.ts";
+import * as Option from "effect/Option";
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
 
@@ -15,6 +17,26 @@ const SetTailscaleServeEnabledInput = Schema.Struct({
   enabled: Schema.Boolean,
   port: Schema.optionalKey(Schema.Number),
 });
+
+class DesktopServerExternallyManagedError extends Schema.TaggedError<DesktopServerExternallyManagedError>()(
+  "DesktopServerExternallyManagedError",
+  {},
+) {
+  override get message() {
+    return "Manage network access where the existing server was started.";
+  }
+}
+
+const requireManagedPrimary = Effect.fn("desktop.ipc.serverExposure.requireManagedPrimary")(
+  function* () {
+    const pool = yield* DesktopBackendPool.DesktopBackendPool;
+    const primary = yield* pool.primary;
+    const config = yield* primary.currentConfig;
+    if (Option.isSome(config) && config.value.externalServer !== undefined) {
+      return yield* new DesktopServerExternallyManagedError();
+    }
+  },
+);
 
 export const getServerExposureState = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.GET_SERVER_EXPOSURE_STATE_CHANNEL,
@@ -31,6 +53,7 @@ export const setServerExposureMode = DesktopIpc.makeIpcMethod({
   payload: DesktopServerExposureModeSchema,
   result: DesktopServerExposureStateSchema,
   handler: Effect.fn("desktop.ipc.serverExposure.setMode")(function* (mode) {
+    yield* requireManagedPrimary();
     const lifecycle = yield* DesktopLifecycle.DesktopLifecycle;
     const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
     const change = yield* serverExposure.setMode(mode);
@@ -46,6 +69,7 @@ export const setTailscaleServeEnabled = DesktopIpc.makeIpcMethod({
   payload: SetTailscaleServeEnabledInput,
   result: DesktopServerExposureStateSchema,
   handler: Effect.fn("desktop.ipc.serverExposure.setTailscaleServeEnabled")(function* (input) {
+    yield* requireManagedPrimary();
     const lifecycle = yield* DesktopLifecycle.DesktopLifecycle;
     const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
     const change = yield* serverExposure.setTailscaleServeEnabled(input);

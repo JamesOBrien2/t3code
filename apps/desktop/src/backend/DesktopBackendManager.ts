@@ -30,6 +30,7 @@ import * as DesktopObservability from "../app/DesktopObservability.ts";
 import * as DesktopTelemetryPublisher from "../telemetry/DesktopTelemetryPublisher.ts";
 import * as DesktopBrowserHost from "../preview/DesktopBrowserHost.ts";
 import * as DesktopWslEnvironment from "../wsl/DesktopWslEnvironment.ts";
+import { connectExistingServer } from "./DesktopExistingServer.ts";
 
 const INITIAL_RESTART_DELAY = Duration.millis(500);
 const MAX_RESTART_DELAY = Duration.seconds(10);
@@ -63,6 +64,8 @@ export interface BackendProcessContext {
 export type DesktopBackendBootstrapDelivery = "fd3" | "stdin";
 
 export interface DesktopBackendStartConfig extends BackendProcessContext {
+  readonly stateDir?: string;
+  readonly externalServer?: { readonly token: string };
   readonly args: ReadonlyArray<string>;
   readonly env: Record<string, string | undefined>;
   /** False passes env verbatim, preventing the Windows T3CODE_HOME from leaking into WSL. */
@@ -244,7 +247,7 @@ export interface BackendInstanceSpec {
   readonly onReady?: (httpBaseUrl: URL) => Effect.Effect<void>;
   readonly onShutdown?: () => Effect.Effect<void>;
   readonly onPreflightFailed?: (failure: PreflightFailure) => Effect.Effect<boolean>;
-  readonly onStateDirOwned?: () => Effect.Effect<void>;
+  readonly onStateDirOwned?: (reason?: string) => Effect.Effect<void>;
   /** Fires on each repeated crash or readiness timeout until the backend becomes ready. */
   readonly onStartupFailure?: (failure: BackendStartupFailure) => Effect.Effect<void>;
 }
@@ -721,6 +724,30 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
         }));
 
         const preflightFailure = config.value.preflightFailure;
+        if (Option.isNone(preflightFailure)) {
+          const existing = yield* connectExistingServer(config.value).pipe(
+            Effect.provideService(FileSystem.FileSystem, fileSystem),
+            Effect.provideService(HttpClient.HttpClient, httpClient),
+            Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+            Effect.result,
+          );
+          if (existing._tag === "Failure") {
+            yield* Ref.update(state, (latest) => ({ ...latest, desiredRunning: false }));
+            yield* spec.onStateDirOwned?.(existing.failure.message) ?? Effect.void;
+            return;
+          }
+          if (Option.isSome(existing.success)) {
+            const attached = existing.success.value;
+            yield* Ref.update(state, (latest) => ({
+              ...latest,
+              config: Option.some(attached),
+              ready: true,
+              restartAttempt: 0,
+            }));
+            yield* spec.onReady?.(attached.httpBaseUrl) ?? Effect.void;
+            return;
+          }
+        }
         if (Option.isSome(preflightFailure)) {
           const { reason, fatal, retryLimit } = preflightFailure.value;
           if (!fatal && retryLimit === undefined) {

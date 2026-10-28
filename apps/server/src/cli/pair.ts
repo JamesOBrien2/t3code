@@ -35,7 +35,7 @@ import {
   type PersistedServerRuntimeState,
   isProcessAlive,
   readPersistedServerRuntimeState,
-} from "../serverRuntimeState.ts";
+} from "@t3tools/shared/serverRuntimeState";
 import {
   buildPairingUrl,
   formatHostForUrl,

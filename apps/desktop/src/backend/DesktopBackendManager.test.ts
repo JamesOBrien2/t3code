@@ -28,6 +28,7 @@ import * as DesktopObservability from "../app/DesktopObservability.ts";
 import * as DesktopTelemetryPublisher from "../telemetry/DesktopTelemetryPublisher.ts";
 import * as DesktopBrowserHost from "../preview/DesktopBrowserHost.ts";
 import * as DesktopWslEnvironment from "../wsl/DesktopWslEnvironment.ts";
+import serverPackageJson from "../../../server/package.json" with { type: "json" };
 
 const decodeDesktopBackendBootstrap = Schema.decodeEffect(
   Schema.fromJsonString(DesktopBackendBootstrap),
@@ -117,6 +118,7 @@ function decodeBootstrap(raw: string) {
 }
 
 interface MakeInstanceInput {
+  readonly fileSystemLayer?: Layer.Layer<FileSystem.FileSystem>;
   readonly spawnerLayer: Layer.Layer<ChildProcessSpawner.ChildProcessSpawner>;
   readonly httpClientLayer?: Layer.Layer<HttpClient.HttpClient>;
   readonly backendOutputLog?: Partial<DesktopObservability.DesktopBackendOutputLogShape>;
@@ -151,9 +153,10 @@ function makeTestInstance(input: MakeInstanceInput) {
     ...input.backendOutputLog,
   };
   const layerServices = Layer.mergeAll(
-    FileSystem.layerNoop({
-      exists: () => Effect.succeed(true),
-    }),
+    input.fileSystemLayer ??
+      FileSystem.layerNoop({
+        exists: () => Effect.succeed(true),
+      }),
     input.spawnerLayer,
     input.httpClientLayer ?? layerHealthyHttpClient,
     Layer.succeed(DesktopObservability.DesktopBackendOutputLogFactory, {
@@ -192,6 +195,86 @@ function makeTestInstance(input: MakeInstanceInput) {
 }
 
 describe("DesktopBackendManager", () => {
+  it.effect("connects to the same-home server without supervising or stopping it", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const ready = yield* Deferred.make<void>();
+        const commands: ChildProcess.Command[] = [];
+        let kills = 0;
+        const origin = "http://127.0.0.1:4888";
+        const config = { ...baseConfig, stateDir: "/tmp/t3/userdata" };
+        const instance = yield* makeTestInstance({
+          config,
+          fileSystemLayer: FileSystem.layerNoop({
+            exists: () => Effect.succeed(true),
+            readFileString: (path) =>
+              Effect.succeed(
+                path.endsWith("environment-id")
+                  ? "local-environment"
+                  : JSON.stringify({
+                      version: 1,
+                      pid: process.pid,
+                      ownerId: "owner",
+                      port: 4888,
+                      origin,
+                      serverVersion: serverPackageJson.version,
+                      startedAt: "2026-10-28T00:00:00Z",
+                    }),
+              ),
+          }),
+          httpClientLayer: layerHttpClient((request) =>
+            Effect.succeed(
+              HttpClientResponse.fromWeb(
+                request,
+                Response.json({
+                  environmentId: "local-environment",
+                  platform: { os: "darwin", arch: "arm64" },
+                  label: "Local",
+                  serverVersion: serverPackageJson.version,
+                  capabilities: {},
+                  auth: { policy: "loopback-browser", bootstrapMethods: ["one-time-token"] },
+                }),
+              ),
+            ),
+          ),
+          spawnerLayer: Layer.succeed(
+            ChildProcessSpawner.ChildProcessSpawner,
+            ChildProcessSpawner.make((command) => {
+              commands.push(command);
+              return Effect.succeed(
+                makeProcess({
+                  stdout: Stream.make(
+                    new TextEncoder().encode(JSON.stringify({ token: "existing-bearer" })),
+                  ),
+                  exitCode:
+                    command._tag === "StandardCommand" && command.args.includes("issue")
+                      ? Effect.succeed(ChildProcessSpawner.ExitCode(0))
+                      : Effect.never,
+                  kill: () =>
+                    Effect.sync(() => {
+                      kills += 1;
+                    }),
+                }),
+              );
+            }),
+          ),
+          onReady: Deferred.succeed(ready, undefined).pipe(Effect.asVoid),
+        });
+        yield* instance.start;
+        yield* Deferred.await(ready);
+        assert.lengthOf(commands, 1);
+        const command = commands[0]!;
+        assert.equal(command._tag, "StandardCommand");
+        if (command._tag === "StandardCommand") assert.include(command.args, "issue");
+        assert.equal(Option.getOrThrow(yield* instance.currentConfig).httpBaseUrl.origin, origin);
+        assert.isTrue(Option.isNone((yield* instance.snapshot).activePid));
+        yield* instance.stop();
+        assert.equal(kills, 0);
+        assert.isFalse((yield* instance.snapshot).restartScheduled);
+      }),
+    ),
+  );
+
   it.effect("spawns the backend with fd3 bootstrap and fd4 telemetry", () =>
     Effect.scoped(
       Effect.gen(function* () {
