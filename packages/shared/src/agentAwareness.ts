@@ -46,6 +46,7 @@ export interface ProjectThreadAwarenessV2Input {
     | "activityRunStatus"
     | "id"
     | "lineage"
+    | "latestRunId"
     | "latestRunStopRequested"
     | "modelSelection"
     | "pendingBackgroundTasks"
@@ -54,8 +55,7 @@ export interface ProjectThreadAwarenessV2Input {
     | "status"
     | "title"
     | "updatedAt"
-  > &
-    Partial<Pick<OrchestrationV2ThreadShell, "latestRunId">>;
+  >;
 }
 
 export function projectThreadAwarenessV2(

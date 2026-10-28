@@ -42,6 +42,7 @@ describe("projectThreadAwarenessV2", () => {
     title: "Integrate orchestration",
     modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
     status: "running" as const,
+    latestRunId: null,
     pendingRuntimeRequest: null,
     settledOverride: null,
     updatedAt,
