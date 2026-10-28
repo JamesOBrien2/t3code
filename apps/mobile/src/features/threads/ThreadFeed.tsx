@@ -123,6 +123,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { KeyboardController } from "react-native-keyboard-controller";
 import { Image as ExpoImage } from "expo-image";
 import { useResolveClassNames } from "uniwind";
 import { useFilePreviewGallery, FilePreviewGallery } from "../../components/FilePreviewGallery";
@@ -2676,6 +2677,9 @@ export const ThreadFeed = memo(function ThreadFeed({
     }
   };
   const handleScrollBeginDrag = () => {
+    if (Platform.OS === "android") {
+      void KeyboardController.dismiss();
+    }
     clearUserScrollSettle();
     userScrollSessionRef.current = true;
     cancelReflow();
