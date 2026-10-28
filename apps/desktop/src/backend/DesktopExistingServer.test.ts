@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as PlatformError from "effect/PlatformError";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { ChildProcessSpawner } from "effect/process";
 
@@ -35,9 +36,22 @@ const config: DesktopBackendStartConfig = {
 };
 
 describe("connectExistingServer", () => {
-  it.effect("refuses incompatible or mismatched servers before issuing a credential", () =>
+  it.effect("reports recovery advice for the failed attachment step", () =>
     Effect.gen(function* () {
-      for (const scenario of ["older", "legacy", "dev", "different-home", "unreachable"] as const) {
+      const spawnError = PlatformError.systemError({
+        _tag: "PermissionDenied",
+        module: "ChildProcess",
+        method: "spawn",
+        cause: new Error("Permission denied"),
+      });
+      for (const scenario of [
+        "older",
+        "legacy",
+        "dev",
+        "different-home",
+        "unreachable",
+        "session",
+      ] as const) {
         const result = yield* connectExistingServer(config).pipe(
           Effect.provide(
             Layer.mergeAll(
@@ -84,7 +98,9 @@ describe("connectExistingServer", () => {
               Layer.succeed(
                 ChildProcessSpawner.ChildProcessSpawner,
                 ChildProcessSpawner.make(() =>
-                  Effect.die("must not issue a credential for an unverified server"),
+                  scenario === "session"
+                    ? Effect.fail(spawnError)
+                    : Effect.die("must not issue a credential for an unverified server"),
                 ),
               ),
             ),
@@ -92,6 +108,21 @@ describe("connectExistingServer", () => {
           Effect.result,
         );
         assert.equal(result._tag, "Failure", scenario);
+        if (result._tag === "Failure") {
+          if (scenario === "unreachable" || scenario === "session") {
+            assert.notInclude(result.failure.message, "Update or stop");
+          }
+          if (scenario === "session") {
+            assert.include(result.failure.message, "session");
+            assert.strictEqual(result.failure.cause, spawnError);
+          }
+          if (scenario === "older") {
+            assert.include(result.failure.message, "Update or stop");
+          }
+          if (scenario === "different-home") {
+            assert.include(result.failure.message, "different environment");
+          }
+        }
       }
     }),
   );

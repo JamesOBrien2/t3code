@@ -20,10 +20,30 @@ import type { DesktopBackendStartConfig } from "./DesktopBackendManager.ts";
 
 export class DesktopExistingServerError extends Schema.TaggedError<DesktopExistingServerError>()(
   "DesktopExistingServerError",
-  { cause: Schema.Defect() },
+  {
+    reason: Schema.Literals([
+      "incompatible-server",
+      "different-environment",
+      "session-issue-failed",
+      "server-replaced",
+      "connect-failed",
+    ]),
+    cause: Schema.optionalKey(Schema.Defect()),
+  },
 ) {
   override get message() {
-    return "T3 Code could not connect to the server already using this T3 home. Update or stop that server, then reopen the app.";
+    switch (this.reason) {
+      case "incompatible-server":
+        return "T3 Code cannot connect to the server already using this T3 home because it is incompatible. Update or stop that server, then reopen the app.";
+      case "different-environment":
+        return "T3 Code found a different environment at the existing server address. Check the server address and T3 home, then reopen the app.";
+      case "session-issue-failed":
+        return "T3 Code could not create a desktop session for the existing server. Check the desktop logs for details, then reopen the app.";
+      case "server-replaced":
+        return "The existing T3 Code server changed while the app was connecting. Reopen the app to connect again.";
+      case "connect-failed":
+        return "T3 Code could not connect to the server already using this T3 home. Check that the server is running and inspect the desktop logs, then reopen the app.";
+    }
   }
 }
 
@@ -45,7 +65,7 @@ export const connectExistingServer = Effect.fn("desktop.existingServer.connect")
     const running = runtime.value;
     // The bundled CLI opens auth storage; an older server must never get newer migrations.
     if (!running.ownerId || running.devUrl || running.serverVersion !== serverPackageJson.version) {
-      return yield* new DesktopExistingServerError({ cause: "incompatible-server" });
+      return yield* new DesktopExistingServerError({ reason: "incompatible-server" });
     }
     const fs = yield* FileSystem.FileSystem;
     const environmentId = (yield* fs.readFileString(
@@ -62,7 +82,7 @@ export const connectExistingServer = Effect.fn("desktop.existingServer.connect")
       descriptor.environmentId !== environmentId ||
       descriptor.serverVersion !== running.serverVersion
     ) {
-      return yield* new DesktopExistingServerError({ cause: "different-environment" });
+      return yield* new DesktopExistingServerError({ reason: "different-environment" });
     }
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const session = yield* Effect.scoped(
@@ -95,13 +115,22 @@ export const connectExistingServer = Effect.fn("desktop.existingServer.connect")
           { concurrency: "unbounded" },
         );
         if (code !== 0)
-          return yield* new DesktopExistingServerError({ cause: "session-issue-failed" });
+          return yield* new DesktopExistingServerError({
+            reason: "session-issue-failed",
+            cause: code,
+          });
         return yield* decodeSession(stdout);
       }),
+    ).pipe(
+      Effect.mapError((cause) =>
+        isDesktopExistingServerError(cause)
+          ? cause
+          : new DesktopExistingServerError({ reason: "session-issue-failed", cause }),
+      ),
     );
     const latest = yield* readPersistedServerRuntimeState(statePath);
     if (Option.isNone(latest) || latest.value.ownerId !== running.ownerId) {
-      return yield* new DesktopExistingServerError({ cause: "server-replaced" });
+      return yield* new DesktopExistingServerError({ reason: "server-replaced" });
     }
     return Option.some({
       ...config,
@@ -111,6 +140,8 @@ export const connectExistingServer = Effect.fn("desktop.existingServer.connect")
   },
   Effect.timeout(Duration.minutes(1)),
   Effect.mapError((cause) =>
-    isDesktopExistingServerError(cause) ? cause : new DesktopExistingServerError({ cause }),
+    isDesktopExistingServerError(cause)
+      ? cause
+      : new DesktopExistingServerError({ reason: "connect-failed", cause }),
   ),
 );
