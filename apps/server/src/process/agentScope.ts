@@ -18,7 +18,7 @@ import * as Path from "effect/Path";
 import * as ServerConfig from "../config.ts";
 import * as ProcessRunner from "../processRunner.ts";
 
-const AGENT_SLICE = "app-t3code-agents.slice";
+export const AGENT_SLICE = "app-t3code-agents.slice";
 
 export function ownedAgentSlice(stateDir: string): string {
   const hash = NodeCrypto.createHash("sha256").update(stateDir).digest("hex").slice(0, 12);

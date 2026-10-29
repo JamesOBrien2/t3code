@@ -204,6 +204,28 @@ const makeHarness = Effect.fn("test.make_boot_service_harness")(function* (
 });
 
 it.layer(NodeServices.layer)("boot service install", (it) => {
+  it.effect("refreshes an older Linux unit with best-effort server memory protection", () =>
+    Effect.gen(function* () {
+      const { service, fs, commands } = yield* makeHarness();
+      const plan = yield* service.install();
+      const unit = yield* fs.readFileString(plan.unitPath);
+      expect(unit).toContain("\nMemoryLow=1G\n");
+
+      yield* fs.writeFileString(plan.unitPath, unit.replace("MemoryLow=1G\n", ""));
+      expect((yield* service.status).current).toBe(false);
+      commands.length = 0;
+
+      yield* service.install({ start: false });
+      expect(yield* fs.readFileString(plan.unitPath)).toBe(unit);
+      expect(commands).not.toContain("systemctl --user stop t3code.service");
+      expect(commands).not.toContain("systemctl --user start t3code.service");
+
+      yield* service.install();
+      expect((yield* service.status).current).toBe(true);
+      expect(commands).toContain("systemctl --user daemon-reload");
+    }),
+  );
+
   it.effect(
     "fails before installing files or validating a runtime when lingering needs an administrator",
     () =>

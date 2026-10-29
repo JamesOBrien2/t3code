@@ -4,6 +4,7 @@ import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
 import { describe, expect, it, vi } from "@effect/vitest";
+import * as LinuxCgroup from "@t3tools/shared/linuxCgroup";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -58,23 +59,23 @@ const server = () => identity(process.pid, 1, process.pid, process.pid, "server"
 
 describe("terminatePosixOwnedProcessTree", () => {
   it("parses unified cgroup paths and escaped cgroup2 mountinfo", () => {
-    expect(AcpSessionRuntime.parseUnifiedCgroupPath("0::/user.slice/app.scope\n")).toBe(
+    expect(LinuxCgroup.parseUnifiedCgroupPath("0::/user.slice/app.scope\n")).toBe(
       "/user.slice/app.scope",
     );
-    expect(AcpSessionRuntime.parseUnifiedCgroupPath("0::/one\n0::/two\n")).toBeUndefined();
-    expect(AcpSessionRuntime.isSafeCgroupPath("/user.slice/app.scope")).toBe(true);
-    expect(AcpSessionRuntime.isSafeCgroupPath("/user.slice/../escape")).toBe(false);
-    expect(AcpSessionRuntime.isSafeCgroupPath("/user.slice/app.scope (deleted)")).toBe(false);
+    expect(LinuxCgroup.parseUnifiedCgroupPath("0::/one\n0::/two\n")).toBeUndefined();
+    expect(LinuxCgroup.isSafeCgroupPath("/user.slice/app.scope")).toBe(true);
+    expect(LinuxCgroup.isSafeCgroupPath("/user.slice/../escape")).toBe(false);
+    expect(LinuxCgroup.isSafeCgroupPath("/user.slice/app.scope (deleted)")).toBe(false);
     expect(
-      AcpSessionRuntime.parseCgroup2Mounts(
+      LinuxCgroup.parseCgroup2Mounts(
         "42 31 0:37 /user.slice /sys/fs/cgroup/user\\040mount rw - cgroup2 cgroup2 rw\n",
       )[0],
     ).toEqual({ mountPoint: "/sys/fs/cgroup/user mount", root: "/user.slice" });
     expect(
-      AcpSessionRuntime.parseCgroup2Mounts("42 31 0:37 / /sys/fs/cgroup rw - tmpfs tmpfs rw\n")[0],
+      LinuxCgroup.parseCgroup2Mounts("42 31 0:37 / /sys/fs/cgroup rw - tmpfs tmpfs rw\n")[0],
     ).toBeUndefined();
     expect(
-      AcpSessionRuntime.parseCgroup2Mounts(
+      LinuxCgroup.parseCgroup2Mounts(
         "41 31 0:36 /other /sys/fs/cgroup/other rw - cgroup2 cgroup2 rw\n" +
           "42 31 0:37 /user.slice /sys/fs/cgroup/user rw - cgroup2 cgroup2 rw\n",
       ),
@@ -222,7 +223,7 @@ describe("terminatePosixOwnedProcessTree", () => {
     const outputPath = NodePath.join(scratch, "argv output");
     NodeFS.mkdirSync(leasePath);
     NodeFS.writeFileSync(NodePath.join(leasePath, "cgroup.procs"), "");
-    const relativePath = AcpSessionRuntime.parseUnifiedCgroupPath(
+    const relativePath = LinuxCgroup.parseUnifiedCgroupPath(
       NodeFS.readFileSync("/proc/self/cgroup", "utf8"),
     );
     expect(relativePath).toBeDefined();

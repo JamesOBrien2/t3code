@@ -131,6 +131,22 @@ waiting. Read CPU together with page faults:
   file writes.
 - Many `involuntaryContextSwitches` mean other processes were competing for the CPU.
 
+On Linux, stall records also include `memoryPressure` when procfs diagnostics
+are readable. `host` contains memory PSI's `someAvg10` and `fullAvg10` percentages.
+`server` and `agents` identify the current server cgroup and the user manager's
+aggregate T3 agent slice, with their PSI averages and cumulative `memory.events`
+counters (`high`, `max`, `oom`, `oom_kill`). The agent slice is omitted when its
+location cannot be identified from the server's cgroup ancestry.
+
+`sampledAt` is the diagnostic sampling time; `windowMs` covers the preceding
+sample interval, which can be shorter than 30 seconds because reconnects also
+sample the monitor. Each cgroup's `eventsDelta` is omitted on the first sample,
+after an unreadable sample, when the cgroup path changes, or when a counter
+resets. Missing diagnostics never suppress the rest of the stall record.
+These values show correlated pressure at sampling time and over the counter
+window, not the cause or precise timing of a past stall. The client stall
+notice does not include this additional data.
+
 ### Related Artifacts
 
 Provider event NDJSON files still exist for provider runtime streams. Those are separate from the main server trace file.

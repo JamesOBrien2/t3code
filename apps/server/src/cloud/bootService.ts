@@ -113,6 +113,8 @@ export function renderBootServiceUnit(plan: BootServicePlan): string {
     // Weights favor the server over the sibling agents slice during CPU or disk saturation.
     "CPUWeight=1000",
     "IOWeight=1000",
+    // Best-effort reclaim protection; effective protection still depends on ancestor budgets.
+    "MemoryLow=1G",
     // systemd-oomd ignores this preference when the watched cgroup is root-owned, as user-1000.slice usually is.
     "ManagedOOMPreference=avoid",
     `StandardOutput=append:${escapeSystemdSpecifiers(plan.logPath)}`,

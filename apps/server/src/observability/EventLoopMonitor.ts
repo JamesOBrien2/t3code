@@ -17,6 +17,7 @@ import * as Semaphore from "effect/Semaphore";
 
 import * as ServerConfig from "../config.ts";
 import * as Metrics from "./Metrics.ts";
+import * as LinuxMemoryPressure from "./LinuxMemoryPressure.ts";
 
 // Subtract the histogram's timer resolution; this can undercount stalls by up to RESOLUTION_MS.
 const RESOLUTION_MS = 1000;
@@ -41,6 +42,7 @@ export class EventLoopMonitor extends Context.Reference<{
 
 /** Delay in ns, active time in ms, CPU in µs. */
 export interface EventLoopReadings {
+  readonly memoryPressure?: LinuxMemoryPressure.Sample | undefined;
   readonly delayMaxNs: number;
   readonly activeMs: number;
   readonly utilization: number;
@@ -62,7 +64,9 @@ export interface EventLoopReadings {
 }
 
 // Node skips the first gap after a reset, so a stall right at a sample boundary can be missed.
-const makeNodeSampler = Effect.gen(function* () {
+const makeNodeSampler = Effect.fn("EventLoopMonitor.makeNodeSampler")(function* (
+  readPressure: Effect.Effect<LinuxMemoryPressure.Sample | undefined>,
+) {
   const histogram = yield* Effect.acquireRelease(
     Effect.sync(() => {
       const histogram = NodePerfHooks.monitorEventLoopDelay({ resolution: RESOLUTION_MS });
@@ -75,37 +79,42 @@ const makeNodeSampler = Effect.gen(function* () {
   let usage = process.resourceUsage();
   let sampledAt = NodePerfHooks.performance.now();
 
-  return Effect.sync(() => {
-    const nextElu = NodePerfHooks.performance.eventLoopUtilization();
-    const nextUsage = process.resourceUsage();
-    const nextSampledAt = NodePerfHooks.performance.now();
-    const memory = process.memoryUsage();
-    const loop = NodePerfHooks.performance.eventLoopUtilization(nextElu, elu);
-    const readings: EventLoopReadings = {
-      delayMaxNs: histogram.max,
-      activeMs: loop.active,
-      utilization: loop.utilization,
-      usage: {
-        userCPUTime: nextUsage.userCPUTime - usage.userCPUTime,
-        systemCPUTime: nextUsage.systemCPUTime - usage.systemCPUTime,
-        majorPageFault: nextUsage.majorPageFault - usage.majorPageFault,
-        minorPageFault: nextUsage.minorPageFault - usage.minorPageFault,
-        involuntaryContextSwitches:
-          nextUsage.involuntaryContextSwitches - usage.involuntaryContextSwitches,
-      },
-      rssBytes: memory.rss,
-      heapUsedBytes: memory.heapUsed,
-      elapsedMs: nextSampledAt - sampledAt,
-      // Windows has no load average and reports 0, which a running process never sees elsewhere.
-      loadAverage: NodeOS.loadavg()[0] || undefined,
-      cpuCount: NodeOS.availableParallelism(),
-    };
-    histogram.reset();
-    elu = nextElu;
-    usage = nextUsage;
-    sampledAt = nextSampledAt;
-    return readings;
-  });
+  return readPressure.pipe(
+    Effect.flatMap((memoryPressure) =>
+      Effect.sync(() => {
+        const nextElu = NodePerfHooks.performance.eventLoopUtilization();
+        const nextUsage = process.resourceUsage();
+        const nextSampledAt = NodePerfHooks.performance.now();
+        const memory = process.memoryUsage();
+        const loop = NodePerfHooks.performance.eventLoopUtilization(nextElu, elu);
+        const readings: EventLoopReadings = {
+          memoryPressure,
+          delayMaxNs: histogram.max,
+          activeMs: loop.active,
+          utilization: loop.utilization,
+          usage: {
+            userCPUTime: nextUsage.userCPUTime - usage.userCPUTime,
+            systemCPUTime: nextUsage.systemCPUTime - usage.systemCPUTime,
+            majorPageFault: nextUsage.majorPageFault - usage.majorPageFault,
+            minorPageFault: nextUsage.minorPageFault - usage.minorPageFault,
+            involuntaryContextSwitches:
+              nextUsage.involuntaryContextSwitches - usage.involuntaryContextSwitches,
+          },
+          rssBytes: memory.rss,
+          heapUsedBytes: memory.heapUsed,
+          elapsedMs: nextSampledAt - sampledAt,
+          // Windows has no load average and reports 0, which a running process never sees elsewhere.
+          loadAverage: NodeOS.loadavg()[0] || undefined,
+          cpuCount: NodeOS.availableParallelism(),
+        };
+        histogram.reset();
+        elu = nextElu;
+        usage = nextUsage;
+        sampledAt = nextSampledAt;
+        return readings;
+      }),
+    ),
+  );
 });
 
 export const stallMs = ({ delayMaxNs, activeMs }: EventLoopReadings) => {
@@ -137,7 +146,7 @@ export interface StallLogOptions {
   readonly maxBytes: number;
 }
 
-const layerWith = (
+export const layerWith = (
   makeSampler: Effect.Effect<Effect.Effect<EventLoopReadings>, never, Scope.Scope>,
   stallLog: StallLogOptions,
 ) =>
@@ -196,6 +205,9 @@ const layerWith = (
           minorPageFaults: usage.minorPageFault,
           involuntaryContextSwitches: usage.involuntaryContextSwitches,
           rssMb: Math.round(rssBytes / 1024 / 1024),
+          ...(readings.memoryPressure === undefined
+            ? {}
+            : { memoryPressure: readings.memoryPressure }),
         };
         yield* Effect.logWarning(`event loop stalled for ${delayMaxMs} ms`).pipe(
           Effect.withSpan("server.eventLoop.stall", { root: true, level: "Warn", attributes }),
@@ -236,7 +248,8 @@ export const layer = Layer.unwrap(
   Effect.gen(function* () {
     const { serverTracePath } = yield* ServerConfig.ServerConfig;
     const path = yield* Path.Path;
-    return layerWith(makeNodeSampler, {
+    const readPressure = yield* LinuxMemoryPressure.makeSampler();
+    return layerWith(makeNodeSampler(readPressure), {
       filePath: path.join(path.dirname(serverTracePath), "event-loop-stalls.ndjson"),
       maxBytes: STALL_LOG_MAX_BYTES,
     });

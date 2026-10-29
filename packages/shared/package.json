@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./linuxCgroup": {
+      "types": "./src/linuxCgroup.ts",
+      "import": "./src/linuxCgroup.ts"
+    },
     "./changedFileKind": {
       "types": "./src/changedFileKind.ts",
       "import": "./src/changedFileKind.ts"

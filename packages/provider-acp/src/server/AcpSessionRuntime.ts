@@ -28,6 +28,11 @@ import * as EffectAcpErrors from "effect-acp/errors";
 import type * as EffectAcpSchema from "effect-acp/compat";
 import type * as EffectAcpProtocol from "effect-acp/protocol";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
+import {
+  isSafeCgroupPath,
+  parseUnifiedCgroupPath,
+  parseCgroup2Mounts,
+} from "@t3tools/shared/linuxCgroup";
 import { AgentScope, AgentScopeThreadId, RAISE_OOM_SCORE_LINE } from "@t3tools/shared/AgentScope";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
@@ -209,42 +214,6 @@ export interface AcpLinuxCgroupController {
 export interface AcpPosixOwnershipRoot {
   captureAttempted?: boolean;
   value: AcpOwnedPosixProcess | undefined;
-}
-
-function decodeMountInfoPath(value: string): string {
-  return value.replace(/\\([0-7]{3})/g, (_match, octal: string) =>
-    String.fromCharCode(Number.parseInt(octal, 8)),
-  );
-}
-
-export function parseUnifiedCgroupPath(contents: string): string | undefined {
-  const matches = [...contents.matchAll(/^0::(\/.*)$/gm)];
-  return matches.length === 1 ? matches[0]![1] : undefined;
-}
-
-export function isSafeCgroupPath(value: string): boolean {
-  return (
-    value.startsWith("/") &&
-    !value.includes("(deleted)") &&
-    NodePath.posix.normalize(value) === value
-  );
-}
-
-export function parseCgroup2Mounts(
-  contents: string,
-): ReadonlyArray<{ readonly mountPoint: string; readonly root: string }> {
-  const mounts: Array<{ readonly mountPoint: string; readonly root: string }> = [];
-  for (const line of contents.split("\n")) {
-    const [mount, filesystem] = line.split(" - ");
-    if (mount === undefined || filesystem?.split(" ")[0] !== "cgroup2") continue;
-    const fields = mount.split(" ");
-    if (fields.length < 5) continue;
-    mounts.push({
-      mountPoint: decodeMountInfoPath(fields[4]!),
-      root: decodeMountInfoPath(fields[3]!),
-    });
-  }
-  return mounts;
 }
 
 export function wrapCommandForLinuxCgroup(

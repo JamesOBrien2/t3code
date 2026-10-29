@@ -80,6 +80,21 @@ Linux needs systemd user services. Setup enables lingering so T3 Code starts at
 boot and keeps running after logout. If this needs administrator permission,
 setup prints a recovery command before changing the service.
 
+The Linux service requests 1 GiB of best-effort memory protection (`MemoryLow`)
+so agent load is less likely to push the server's working set out of RAM. This
+does not reserve RAM, cap usage, or guarantee responsiveness. On cgroup v2,
+effective protection depends on the ancestor cgroups' protection budgets; a
+nonzero value on the service alone does not establish protection. Ask the host
+administrator to check the hierarchy if the server still swaps under load.
+Manually launched servers and non-systemd WSL backends do not get this policy.
+
+For an older installed unit, run `t3 service install` with the updated CLI to
+refresh it; restarting alone does not rewrite the unit. Installation restarts
+the service and interrupts active work. Administrators can override the value
+with a systemd user-service drop-in, for example `MemoryLow=0` to disable it.
+Reload the user manager after editing a drop-in. T3 does not change ancestor
+budgets or administrator drop-ins.
+
 macOS starts the service when you log in and stops it when you log out. Keep the
 Mac logged in and awake for unattended remote access. Installing over SSH while
 nobody is logged in at the Mac's screen can fail at the final start step; the

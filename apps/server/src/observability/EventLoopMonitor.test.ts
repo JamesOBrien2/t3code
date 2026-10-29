@@ -1,4 +1,9 @@
-import { assert, describe, it } from "@effect/vitest";
+import { assert, describe, expect, it } from "@effect/vitest";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Queue from "effect/Queue";
+import * as TestClock from "effect/testing/TestClock";
 
 import * as EventLoopMonitor from "./EventLoopMonitor.ts";
 
@@ -33,4 +38,42 @@ describe("EventLoopMonitor", () => {
     assert.isUndefined(EventLoopMonitor.stallMs(asleep));
     assert.strictEqual(EventLoopMonitor.stallMs({ ...asleep, activeMs: 600_000 }), 599_000);
   });
+});
+
+it.layer(NodeServices.layer)("stall pressure evidence", (it) => {
+  it.effect.each([true, false])("persists a stall with diagnostics available: %s", (available) =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-stall-pressure-" });
+      const filePath = `${directory}/stalls.ndjson`;
+      const sampled = yield* Queue.unbounded<void>();
+      const memoryPressure = available
+        ? {
+            sampledAt: "1970-01-01T00:01:00.000Z",
+            windowMs: 30_000,
+            host: { someAvg10: 12.5, fullAvg10: 2 },
+            server: undefined,
+            agents: undefined,
+          }
+        : undefined;
+      const sample = Queue.offer(sampled, undefined).pipe(
+        Effect.as({ ...stalled, memoryPressure }),
+      );
+      yield* Effect.gen(function* () {
+        const monitor = yield* EventLoopMonitor.EventLoopMonitor;
+        yield* TestClock.adjust("30 seconds");
+        yield* Queue.take(sampled);
+        yield* TestClock.adjust("30 seconds");
+        yield* Queue.take(sampled);
+        yield* monitor.latestNoticeableStall;
+        const lines = (yield* fs.readFileString(filePath)).trim().split("\n");
+        expect(JSON.parse(lines[0]!)).toMatchObject({ delayMaxMs: 4950, majorPageFaults: 8412 });
+        expect(JSON.parse(lines[0]!).memoryPressure).toEqual(memoryPressure);
+      }).pipe(
+        Effect.provide(
+          EventLoopMonitor.layerWith(Effect.succeed(sample), { filePath, maxBytes: 4096 }),
+        ),
+      );
+    }),
+  );
 });
