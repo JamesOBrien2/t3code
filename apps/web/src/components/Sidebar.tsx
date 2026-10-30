@@ -2876,7 +2876,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           const preset =
             clicked.value === "snooze:custom"
               ? await requestCustomSnooze()
-              : snoozePresets.find((candidate) => `snooze:${candidate.id}` === clicked.value);
+              : pickSnoozePreset(
+                  snoozePresets,
+                  clicked.value.replace("snooze:", ""),
+                  timestampFormat,
+                  shelfThreads[0]!.environmentId,
+                );
           if (!preset) return;
           const coSnoozingKeys = new Set(entries.map((entry) => entry.threadKey));
           const failures = (
