@@ -2803,8 +2803,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   );
 
   const handleShelfContextMenu = useStableCallback(
-    (shelf: "working" | "snoozed" | "settled", position: { x: number; y: number }) => {
-      if (shelf === "settled" && olderSettledShelf.unloadedCount(threads) > 0) {
+    (
+      shelf: "working" | "snoozed" | "settled",
+      position: { x: number; y: number },
+      options: { loaded?: boolean } = {},
+    ) => {
+      if (shelf === "settled" && !options.loaded && olderSettledShelf.unloadedCount(threads) > 0) {
         if (!settledShelfExpanded) {
           toggleSettledShelf();
         }
@@ -3018,8 +3022,19 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       ({ older, pages }) => older === null || pages.frontier === null,
     );
     const unloaded = olderSettledShelf.unloadedCount(threads);
+    if (olderSettledShelf.failed || (unloaded > 0 && fullyLoaded)) {
+      // oxlint-disable-next-line react/set-state-in-effect -- drops the stale pending menu
+      setSettledMenuPending(null);
+      if (olderSettledShelf.failed) {
+        toastManager.add({
+          type: "error",
+          title: "Could not load older settled threads",
+          description: "Retry when Show more finishes.",
+        });
+      }
+      return;
+    }
     if (!olderSettledShelf.failed && unloaded > 0 && !fullyLoaded) return;
-    // oxlint-disable-next-line react/set-state-in-effect -- opens the cached menu once page loading resolves
     setSettledMenuPending(null);
     if (olderSettledShelf.failed) {
       toastManager.add({
@@ -3029,7 +3044,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       });
       return;
     }
-    handleShelfContextMenu("settled", settledMenuPending);
+    handleShelfContextMenu("settled", settledMenuPending, { loaded: true });
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Effect awaits loading then opens the cached menu
   }, [
     settledMenuPending,

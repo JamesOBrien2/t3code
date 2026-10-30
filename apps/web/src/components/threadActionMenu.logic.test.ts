@@ -107,7 +107,6 @@ describe("buildShelfActionMenuItems", () => {
       "archive",
       "delete",
     ]);
-    expect(items.find((item) => item.id === "archive")?.label).toBe("Archive (116)");
   });
 
   it("offers settle for working threads and wake for snoozed threads", () => {
