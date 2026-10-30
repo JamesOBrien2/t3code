@@ -116,6 +116,7 @@ export function SidebarSectionHeader(props: {
   dragging?: boolean;
   isDropTarget?: boolean;
   toggle: { expanded: boolean; onToggle: () => void };
+  onContextMenu?: (position: { x: number; y: number }) => void;
 }) {
   const shelf =
     props.marker === "working-header"
@@ -123,6 +124,7 @@ export function SidebarSectionHeader(props: {
       : props.marker === "snoozed-header"
         ? "snoozed"
         : "settled";
+  const onContextMenu = props.onContextMenu;
   return (
     <SortableSidebarMarker
       marker={props.marker}
@@ -134,6 +136,11 @@ export function SidebarSectionHeader(props: {
         tabIndex={-1}
         data-sidebar-row={`shelf:${shelf}`}
         onClick={props.toggle.onToggle}
+        onContextMenu={(event) => {
+          if (!onContextMenu) return;
+          event.preventDefault();
+          onContextMenu({ x: event.clientX, y: event.clientY });
+        }}
         expanded={props.toggle.expanded}
         tone={props.isDropTarget ? "accent" : props.dragging ? "emphasized" : "muted"}
         data-testid={`sidebar-${shelf}-shelf-toggle`}

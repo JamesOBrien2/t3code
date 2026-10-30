@@ -266,3 +266,105 @@ export function buildThreadActionMenuItems(
           : item,
       );
 }
+
+export type ShelfActionMenuId =
+  | "settle"
+  | "unsettle"
+  | "snooze"
+  | `snooze:${string}`
+  | "unsnooze"
+  | "mark-unread"
+  | "archive"
+  | "delete";
+
+export interface ShelfActionMenuState {
+  readonly shelf: "working" | "snoozed" | "settled";
+  readonly count: number;
+  readonly unsettledCount: number;
+  readonly settledCount: number;
+  readonly canOperate: boolean;
+  readonly supportsSettlement: boolean;
+  readonly supportsSnooze: boolean;
+  /** Every thread in the shelf can be snoozed right now. */
+  readonly canSnoozeAll: boolean;
+  /** Archive rejects attached providers, so it is disabled when any thread is running. */
+  readonly hasRunningThread: boolean;
+  readonly snoozePresets: ReadonlyArray<SnoozePreset>;
+}
+
+export function buildShelfActionMenuItems(
+  state: ShelfActionMenuState,
+): ReadonlyArray<ContextMenuItem<ShelfActionMenuId>> {
+  const items: ContextMenuItem<ShelfActionMenuId>[] = [];
+  if (state.supportsSettlement) {
+    if (state.unsettledCount > 0) {
+      items.push({
+        id: "settle",
+        label: `Settle (${state.unsettledCount})`,
+        icon: "circle-check",
+        disabled: !state.canOperate,
+      });
+    }
+    if (state.settledCount > 0) {
+      items.push({
+        id: "unsettle",
+        label: `Un-settle (${state.settledCount})`,
+        icon: "circle-check",
+        disabled: !state.canOperate,
+      });
+    }
+  }
+  if (state.supportsSnooze) {
+    if (state.shelf === "snoozed") {
+      items.push({
+        id: "unsnooze",
+        label: `Wake (${state.count})`,
+        icon: "clock",
+        disabled: !state.canOperate,
+      });
+    } else if (state.canSnoozeAll) {
+      items.push({
+        id: "snooze",
+        label: `Snooze (${state.count})`,
+        icon: "clock",
+        disabled: !state.canOperate,
+        children: [
+          ...state.snoozePresets.map((preset) => ({
+            id: `snooze:${preset.id}` as const,
+            label: `${preset.label} (${preset.whenLabel})`,
+            disabled: !state.canOperate,
+          })),
+          {
+            id: "snooze:custom" as const,
+            label: "Custom…",
+            separatorBefore: true,
+            disabled: !state.canOperate,
+          },
+        ],
+      });
+    }
+  }
+  items.push(
+    {
+      id: "mark-unread",
+      label: `Mark unread (${state.count})`,
+      icon: "mail-open",
+      separatorBefore: true,
+    },
+    {
+      id: "archive",
+      label: `Archive (${state.count})`,
+      icon: "archive",
+      separatorBefore: true,
+      disabled: !state.canOperate || state.hasRunningThread,
+    },
+    {
+      id: "delete",
+      label: `Delete (${state.count})`,
+      icon: "trash",
+      destructive: true,
+      disabled: !state.canOperate,
+    },
+  );
+  return items;
+}

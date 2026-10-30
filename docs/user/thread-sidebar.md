@@ -59,6 +59,11 @@ and worktree while you stay in the new thread composer. This requires a Git proj
 
 Pin a thread from its menu to keep it above your active work.
 
+On web and desktop, right-click the **Working**, **Snoozed**, or **Settled** header to
+settle, snooze, mark unread, archive, or delete every thread in that section. The
+Settled shelf acts on the threads it has loaded, so choose **Show more** first to
+include older ones.
+
 On web and desktop, unpinning, settling, snoozing, and archiving a thread each show
 a notification with **Undo** for five seconds. Undo restores the thread's previous
 state, including its pinned position, and reopens an archived thread you were

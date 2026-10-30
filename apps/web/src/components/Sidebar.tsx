@@ -166,6 +166,7 @@ import { cn } from "~/lib/utils";
 import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
 import {
   buildDraftActionMenuItems,
+  buildShelfActionMenuItems,
   buildThreadActionMenuItems,
   threadActionRequiresOperate,
 } from "./threadActionMenu.logic";
@@ -176,6 +177,7 @@ import {
   sidebarFolderExpansionKeys,
   buildBulkTitleRegenerationContextMenuItem,
   buildBulkUnpinContextMenuItem,
+  archiveSelectedThreadEntries,
   deleteSelectedThreadEntries,
   filterSidebarProjectScopeItems,
   firstValidTimestampMs,
@@ -2795,6 +2797,195 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     },
   );
 
+  const handleShelfContextMenu = useStableCallback(
+    (shelf: "working" | "snoozed" | "settled", position: { x: number; y: number }) => {
+      void (async () => {
+        const api = readLocalApi();
+        if (!api) return;
+        const shelfThreads =
+          shelf === "working"
+            ? workingThreads
+            : shelf === "snoozed"
+              ? snoozedThreads
+              : settledThreads;
+        const count = shelfThreads.length;
+        if (count === 0) return;
+        const now = new Date().toISOString();
+        const entries = shelfThreads.map((thread) => {
+          const threadRef = scopeThreadRef(thread.environmentId, thread.id);
+          return {
+            threadKey: scopedThreadKey(threadRef),
+            threadRef,
+            settled: thread.settledOverride === "settled",
+          };
+        });
+        const snoozePresets = resolveSnoozePresets(
+          new Date(),
+          timestampFormat,
+          shelfThreads[0]!.environmentId,
+        );
+        const supportsSettlement = shelfThreads.every(
+          (thread) =>
+            serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSettlement ===
+            true,
+        );
+        const supportsSnooze = shelfThreads.some(
+          (thread) =>
+            serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSnooze === true,
+        );
+        const canSnoozeAll = shelfThreads.every(
+          (thread) =>
+            serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSnooze ===
+              true && canSnooze(thread, { now }),
+        );
+        const clicked = await settlePromise(() =>
+          api.contextMenu.show(
+            buildShelfActionMenuItems({
+              shelf,
+              count,
+              unsettledCount: entries.filter((entry) => !entry.settled).length,
+              settledCount: entries.filter((entry) => entry.settled).length,
+              canOperate: canOperateThreads(shelfThreads),
+              supportsSettlement,
+              supportsSnooze,
+              canSnoozeAll,
+              hasRunningThread: shelfThreads.some(
+                (thread) => !threadRuntimeCanArchive(thread.runtime),
+              ),
+              snoozePresets,
+            }),
+            position,
+          ),
+        );
+        if (clicked._tag === "Failure" || clicked.value === null) return;
+        if (clicked.value !== "mark-unread" && !checkThreadOperations(shelfThreads)) return;
+
+        if (clicked.value.startsWith("snooze:")) {
+          const preset =
+            clicked.value === "snooze:custom"
+              ? await requestCustomSnooze()
+              : snoozePresets.find((candidate) => `snooze:${candidate.id}` === clicked.value);
+          if (!preset) return;
+          const coSnoozingKeys = new Set(entries.map((entry) => entry.threadKey));
+          const failures = (
+            await Promise.all(
+              entries.map(async (entry) => {
+                const outcome = await performSnooze(entry.threadRef, preset, { coSnoozingKeys });
+                return outcome.status === "failure" ? outcome.error : null;
+              }),
+            )
+          ).filter((error) => error !== null);
+          if (failures.length > 0) {
+            const firstError: unknown = failures[0];
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: "Failed to snooze threads",
+                description:
+                  firstError instanceof Error ? firstError.message : "An error occurred.",
+              }),
+            );
+          }
+          return;
+        }
+
+        switch (clicked.value) {
+          case "settle": {
+            const targets = entries.filter((entry) => !entry.settled);
+            const coSettlingKeys = new Set(targets.map((entry) => entry.threadKey));
+            for (const entry of targets) {
+              attemptSettle(entry.threadRef, { coSettlingKeys });
+            }
+            return;
+          }
+          case "unsettle":
+            for (const entry of entries) {
+              if (entry.settled) attemptUnsettle(entry.threadRef);
+            }
+            return;
+          case "unsnooze":
+            for (const entry of entries) attemptUnsnooze(entry.threadRef);
+            return;
+          case "mark-unread":
+            for (const entry of entries) markThreadUnread(entry.threadRef);
+            return;
+          case "archive": {
+            if (confirmThreadArchive) {
+              const confirmed = await settlePromise(() =>
+                api.dialogs.confirm(`Archive ${count} thread${count === 1 ? "" : "s"}?`),
+              );
+              if (confirmed._tag === "Failure" || !confirmed.value) return;
+            }
+            const outcome = await archiveSelectedThreadEntries({
+              entries,
+              archive: ({ threadRef }, onArchived) => archiveThread(threadRef, { onArchived }),
+            });
+            for (const failure of outcome.followupFailures) {
+              if (isAtomCommandInterrupted(failure)) continue;
+              const error = squashAtomCommandFailure(failure);
+              toastManager.add(
+                stackedThreadToast({
+                  type: "error",
+                  title: "Thread archived, but navigation failed",
+                  description: error instanceof Error ? error.message : "An error occurred.",
+                }),
+              );
+            }
+            if (outcome.mutationFailure !== null) {
+              removeFromSelection(outcome.archivedThreadKeys);
+              if (!isAtomCommandInterrupted(outcome.mutationFailure)) {
+                const error = squashAtomCommandFailure(outcome.mutationFailure);
+                toastManager.add(
+                  stackedThreadToast({
+                    type: "error",
+                    title: "Failed to archive threads",
+                    description: error instanceof Error ? error.message : "An error occurred.",
+                  }),
+                );
+              }
+              return;
+            }
+            removeFromSelection(entries.map((entry) => entry.threadKey));
+            return;
+          }
+          case "delete": {
+            if (confirmThreadDelete) {
+              const confirmed = await settlePromise(() =>
+                api.dialogs.confirm(
+                  [
+                    `Delete ${count} thread${count === 1 ? "" : "s"}?`,
+                    "This permanently clears conversation history for these threads.",
+                  ].join("\n"),
+                  { variant: "destructive" },
+                ),
+              );
+              if (confirmed._tag === "Failure" || !confirmed.value) return;
+            }
+            const { deletedThreadKeys, firstFailure } = await deleteSelectedThreadEntries({
+              entries,
+              delete: async ({ threadRef }, deletedKeys) =>
+                deleteThread(threadRef, { deletedThreadKeys: deletedKeys }),
+            });
+            if (firstFailure !== null) {
+              const error = squashAtomCommandFailure(firstFailure);
+              toastManager.add(
+                stackedThreadToast({
+                  type: "error",
+                  title: "Failed to delete threads",
+                  description: error instanceof Error ? error.message : "An error occurred.",
+                }),
+              );
+            }
+            removeFromSelection([...deletedThreadKeys]);
+            return;
+          }
+          default:
+            return;
+        }
+      })();
+    },
+  );
+
   const routeTerminalOpen = useTerminalUiStateStore((state) =>
     routeThreadRef
       ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, routeThreadRef).terminalOpen
@@ -3401,6 +3592,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                   expanded: workingShelfExpanded,
                                   onToggle: toggleWorkingShelf,
                                 }}
+                                onContextMenu={(position) =>
+                                  handleShelfContextMenu("working", position)
+                                }
                               />,
                             );
                             break;
@@ -3416,6 +3610,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                   expanded: snoozedShelfExpanded,
                                   onToggle: toggleSnoozedShelf,
                                 }}
+                                onContextMenu={(position) =>
+                                  handleShelfContextMenu("snoozed", position)
+                                }
                               />,
                             );
                             break;
@@ -3435,6 +3632,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                   expanded: settledShelfExpanded,
                                   onToggle: toggleSettledShelf,
                                 }}
+                                onContextMenu={(position) =>
+                                  handleShelfContextMenu("settled", position)
+                                }
                               />,
                             );
                             break;
