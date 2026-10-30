@@ -480,6 +480,7 @@ function useSidebarThreads(input: {
   });
   const listedSettledThreads = settledThreads.filter(olderSettledShelf.isListed);
   useOlderSettledShelfGrowth(olderSettledShelf, listedSettledThreads);
+
   const settledCount =
     settledThreads.length + olderSettledShelf.unloadedCount(partition.visibleThreads);
   const visibleSettledThreads = (() => {
@@ -2797,8 +2798,19 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     },
   );
 
+  const [settledMenuPending, setSettledMenuPending] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+
   const handleShelfContextMenu = useStableCallback(
     (shelf: "working" | "snoozed" | "settled", position: { x: number; y: number }) => {
+      if (shelf === "settled" && olderSettledShelf.unloadedCount(threads) > 0) {
+        if (!settledShelfExpanded) toggleSettledShelf();
+        const needed = Math.ceil(olderSettledShelf.unloadedCount(threads) / 25);
+        for (let i = 0; i < needed + 2; i += 1) showMoreSettled();
+        setSettledMenuPending(position);
+        return;
+      }
       void (async () => {
         const api = readLocalApi();
         if (!api) return;
@@ -2985,6 +2997,37 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       })();
     },
   );
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- awaits paged-out settled rows to load before opening the cached context menu
+  useEffect(() => {
+    if (settledMenuPending === null) return;
+    const fullyLoaded = [...olderSettledShelf.environments.values()].every(
+      ({ older, pages }) => older === null || pages.frontier === null,
+    );
+    const unloaded = olderSettledShelf.unloadedCount(threads);
+    if (!olderSettledShelf.failed && unloaded > 0 && !fullyLoaded) return;
+    // oxlint-disable-next-line react/set-state-in-effect -- opens the cached menu once page loading resolves
+    setSettledMenuPending(null);
+    if (olderSettledShelf.failed) {
+      toastManager.add({
+        type: "error",
+        title: "Could not load older settled threads",
+        description: "Retry when Show more finishes.",
+      });
+      return;
+    }
+    handleShelfContextMenu("settled", settledMenuPending);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Effect awaits loading then opens the cached menu
+  }, [
+    settledMenuPending,
+    olderSettledShelf,
+    threads,
+    toastManager,
+    handleShelfContextMenu,
+    showMoreSettled,
+    settledCount,
+    settledShelfExpanded,
+  ]);
 
   const routeTerminalOpen = useTerminalUiStateStore((state) =>
     routeThreadRef
