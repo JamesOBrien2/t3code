@@ -2805,9 +2805,17 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const handleShelfContextMenu = useStableCallback(
     (shelf: "working" | "snoozed" | "settled", position: { x: number; y: number }) => {
       if (shelf === "settled" && olderSettledShelf.unloadedCount(threads) > 0) {
-        if (!settledShelfExpanded) toggleSettledShelf();
-        const needed = Math.ceil(olderSettledShelf.unloadedCount(threads) / 25);
-        for (let i = 0; i < needed + 2; i += 1) showMoreSettled();
+        if (!settledShelfExpanded) {
+          toggleSettledShelf();
+        }
+        const unloaded = olderSettledShelf.unloadedCount(threads);
+        const menuPages = Math.max(1, Math.ceil(unloaded / 25));
+        const nextPages = new Map(olderSettledShelf.pages);
+        for (const [environmentId, environment] of olderSettledShelf.environments) {
+          if (environment.older === null || environment.pages.frontier === null) continue;
+          nextPages.set(environmentId, (nextPages.get(environmentId) ?? 0) + menuPages + 1);
+        }
+        olderSettledShelf.grow(nextPages);
         setSettledMenuPending(position);
         return;
       }
