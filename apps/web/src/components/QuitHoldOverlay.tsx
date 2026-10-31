@@ -5,16 +5,17 @@ import { isMacPlatform } from "../lib/utils";
 const HOLD_HINT_LINGER_MS = 1200;
 
 type QuitHintMode = "hold" | "double-click";
+type QuitHint = { readonly mode: QuitHintMode; readonly remainingMs: number | null };
 
-let visibleMode: QuitHintMode | null = null;
+let visibleHint: QuitHint | null = null;
 let pressedMode: QuitHintMode = "hold";
 let hideTimer: number | undefined;
 const listeners = new Set<() => void>();
 let stopBridge: (() => void) | null = null;
 
-function setVisibleMode(next: QuitHintMode | null) {
-  if (next === visibleMode) return;
-  visibleMode = next;
+function setVisibleHint(next: QuitHint | null) {
+  if (next === visibleHint) return;
+  visibleHint = next;
   for (const listener of listeners) listener();
 }
 
@@ -26,14 +27,18 @@ function subscribeQuitHint(listener: () => void): () => void {
         window.clearTimeout(hideTimer);
         if (hint.state === "down") {
           pressedMode = hint.mode;
-          setVisibleMode(hint.mode);
+          setVisibleHint({
+            mode: hint.mode,
+            remainingMs: hint.mode === "hold" ? hint.remainingMs : null,
+          });
           return;
         }
         if (pressedMode === "double-click") {
-          setVisibleMode(null);
+          setVisibleHint(null);
           return;
         }
-        hideTimer = window.setTimeout(() => setVisibleMode(null), HOLD_HINT_LINGER_MS);
+        if (visibleHint) setVisibleHint({ ...visibleHint, remainingMs: null });
+        hideTimer = window.setTimeout(() => setVisibleHint(null), HOLD_HINT_LINGER_MS);
       }) ?? null;
   }
   return () => {
@@ -42,28 +47,54 @@ function subscribeQuitHint(listener: () => void): () => void {
     window.clearTimeout(hideTimer);
     stopBridge?.();
     stopBridge = null;
-    visibleMode = null;
+    visibleHint = null;
   };
 }
 
-const readQuitHint = () => visibleMode;
+const readQuitHint = () => visibleHint;
 
 export function QuitHoldOverlay() {
-  const visibleMode = useSyncExternalStore(subscribeQuitHint, readQuitHint, readQuitHint);
+  const hint = useSyncExternalStore(subscribeQuitHint, readQuitHint, readQuitHint);
 
-  if (!visibleMode) return null;
-  const shortcut = isMacPlatform(navigator.platform) ? "⌘Q" : "Ctrl+Q";
-  const message =
-    visibleMode === "hold"
-      ? `Hold ${shortcut} or press twice to quit`
-      : `Press ${shortcut} again to quit`;
+  if (!hint) return null;
+  const { mode: visibleMode, remainingMs: holdRemainingMs } = hint;
+  const shortcut = isMacPlatform(navigator.platform) ? "⌘ Q" : "Ctrl Q";
   return (
     <div
       role="status"
       className="pointer-events-none fixed inset-x-0 top-[22%] z-100 flex justify-center"
     >
-      <div className="rounded-full bg-foreground/95 px-8 py-4 text-2xl font-bold text-background shadow-xl">
-        {message}
+      <div className="relative rounded-2xl bg-popover px-6 py-4 text-center text-popover-foreground shadow-xl ring-1 ring-border">
+        {visibleMode === "hold" ? (
+          <svg
+            aria-hidden
+            focusable="false"
+            data-holding={holdRemainingMs !== null ? "true" : undefined}
+            className="quit-hold-trace"
+          >
+            <rect
+              width="100%"
+              height="100%"
+              rx="16"
+              pathLength="1"
+              style={
+                holdRemainingMs !== null
+                  ? { animationDuration: `${Math.max(0, holdRemainingMs)}ms` }
+                  : undefined
+              }
+            />
+          </svg>
+        ) : null}
+        <div className="flex items-center justify-center gap-2 text-base font-medium">
+          {visibleMode === "hold" ? "Hold" : "Press"}
+          <kbd className="rounded-md bg-muted px-2 py-0.5 font-sans text-sm font-medium ring-1 ring-border">
+            {shortcut}
+          </kbd>
+          {visibleMode === "hold" ? "to quit" : "again to quit"}
+        </div>
+        {visibleMode === "hold" ? (
+          <div className="mt-1.5 text-xs text-muted-foreground">or press twice</div>
+        ) : null}
       </div>
     </div>
   );
