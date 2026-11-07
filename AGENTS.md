@@ -138,6 +138,7 @@ For authorized mobile verification, a missing or outdated native client is a bui
 
 ## Pull requests
 
+- Before assessing or acting on a T3 Code issue or PR, read [CONTRIBUTING.md](CONTRIBUTING.md) and follow its scope, approval, evidence, and triage requirements.
 - Never make a PR unless the developer explicitly asks you to do so.
 - If `origin` is git.cafe, follow [GitCafe mirror](docs/operations/development.md#gitcafe-mirror-optional): use `cafe` for existing PRs, issues, comments and labels, but push and open PRs on GitHub, where CI runs.
 - Conventional commit titles, plain language: `fix(web): new threads no longer spike CPU`.
