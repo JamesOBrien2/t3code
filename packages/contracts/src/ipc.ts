@@ -34,7 +34,12 @@ export interface ContextMenuItem<T extends string = string> {
 }
 
 export type QuitShortcutHintEvent =
-  | { readonly state: "down"; readonly mode: Exclude<QuitConfirmationMode, "direct"> }
+  | {
+      readonly state: "down";
+      readonly mode: Exclude<QuitConfirmationMode, "direct">;
+      /** Milliseconds left in the confirmation window, so the overlay can time its trace. */
+      readonly remainingMs: number;
+    }
   | { readonly state: "up" };
 
 export interface ContextMenuItemSchemaType {

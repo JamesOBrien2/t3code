@@ -2348,6 +2348,45 @@ code {
   filter: saturate(1.2);
 }
 
+/* The hold-to-quit pill outlines itself over the remaining hold time. */
+.quit-hold-trace {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.quit-hold-trace rect {
+  x: 2px;
+  y: 2px;
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
+  rx: 30px;
+  ry: 30px;
+  fill: none;
+  stroke-width: 3;
+}
+
+.quit-hold-track {
+  stroke: color-mix(in srgb, currentColor 15%, transparent);
+}
+
+.quit-hold-progress {
+  stroke: currentColor;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+}
+
+.quit-hold-progress[data-holding="true"] {
+  animation: quit-hold-trace 1200ms linear forwards;
+}
+
+@keyframes quit-hold-trace {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
 @keyframes preview-loading-progress {
   from {
     transform: scaleX(0.04);

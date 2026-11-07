@@ -170,7 +170,7 @@ export function makeQuitShortcutHandler(
           }
           mode = resolvedMode;
           notified = true;
-          options.notify({ state: "down", mode: resolvedMode });
+          options.notify({ state: "down", mode: resolvedMode, remainingMs });
           watchdog = setTimeout(release, remainingMs);
           return;
         }
@@ -179,7 +179,11 @@ export function makeQuitShortcutHandler(
 
         mode = resolvedMode;
         notified = true;
-        options.notify({ state: "down", mode: resolvedMode });
+        options.notify({
+          state: "down",
+          mode: resolvedMode,
+          remainingMs: Math.max(0, QUIT_HOLD_DURATION_MS - (Date.now() - now)),
+        });
 
         armed = true;
         watchdog = setTimeout(() => {
