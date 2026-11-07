@@ -128,6 +128,7 @@ function makeDeliveryAttempts(
   overrides: Partial<DeliveryAttempts.DeliveryAttempts["Service"]> = {},
 ): DeliveryAttempts.DeliveryAttempts["Service"] {
   return {
+    claimActivityAlert: () => Effect.succeed(true),
     record: () => Effect.void,
     claimSourceJob: () => Effect.succeed("claimed"),
     completeSourceJob: () => Effect.void,

@@ -2326,6 +2326,42 @@ code {
   }
 }
 
+.quit-hold-trace {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 2px;
+  stroke-linecap: round;
+}
+
+.quit-hold-trace rect {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.quit-hold-trace[data-holding="true"] rect {
+  animation-name: quit-hold-trace;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes quit-hold-trace {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quit-hold-trace[data-holding="true"] rect {
+    animation-timing-function: steps(4, end);
+  }
+}
+
 /* Let the sortable rows open label clearance before painting the dividers.
    This runs once per pickup; rows retain dnd-kit's normal 200ms transitions. */
 .sidebar-drag-boundary-label {

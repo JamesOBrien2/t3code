@@ -8,7 +8,11 @@ import {
 import type { QuitHoldKeyInput } from "./QuitHold.ts";
 import type { QuitConfirmationMode, QuitShortcutHintEvent } from "@t3tools/contracts";
 
-const DOUBLE_CLICK_DOWN = { state: "down", mode: "double-click" } as const;
+const DOUBLE_CLICK_DOWN = {
+  state: "down",
+  mode: "double-click",
+  remainingMs: QUIT_DOUBLE_PRESS_MS,
+} as const;
 const UP = { state: "up" } as const;
 
 function makeInput(overrides: Partial<QuitHoldKeyInput>): QuitHoldKeyInput {
@@ -102,6 +106,26 @@ describe("makeQuitShortcutHandler", () => {
 
     expect(harness.quit).not.toHaveBeenCalled();
     expect(harness.notifications).toEqual([]);
+  });
+
+  it("reports the hold time left when the mode read settles", async () => {
+    let resolveMode: ((mode: QuitConfirmationMode) => void) | undefined;
+    const harness = makeHarness({
+      getMode: () =>
+        new Promise((resolve) => {
+          resolveMode = resolve;
+        }),
+    });
+    await harness.send(makeInput({}));
+    vi.advanceTimersByTime(300);
+
+    resolveMode?.("hold");
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(harness.notifications).toEqual([
+      { state: "down", mode: "hold", remainingMs: QUIT_HOLD_DURATION_MS - 300 },
+    ]);
   });
 
   it.each(["direct", "hold", "double-click"] as const)(

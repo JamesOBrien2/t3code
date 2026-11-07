@@ -241,7 +241,13 @@ contextBridge.exposeInMainWorld("desktopBridge", {
         "mode" in hint &&
         (hint.mode === "hold" || hint.mode === "double-click")
       ) {
-        listener({ state: "down", mode: hint.mode });
+        const remainingMs =
+          "remainingMs" in hint &&
+          typeof hint.remainingMs === "number" &&
+          Number.isFinite(hint.remainingMs)
+            ? Math.max(0, hint.remainingMs)
+            : 0;
+        listener({ state: "down", mode: hint.mode, remainingMs });
       }
     };
 

@@ -20,6 +20,7 @@ export type AgentAwarenessPhase =
 export interface AgentAwarenessState {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
+  readonly runId?: string;
   readonly projectTitle: string;
   readonly threadTitle: string;
   readonly phase: AgentAwarenessPhase;
@@ -54,7 +55,8 @@ export interface ProjectThreadAwarenessV2Input {
     | "status"
     | "title"
     | "updatedAt"
-  >;
+  > &
+    Partial<Pick<OrchestrationV2ThreadShell, "latestRunId">>;
 }
 
 export function projectThreadAwarenessV2(
@@ -89,6 +91,7 @@ export function projectThreadAwarenessV2(
   return {
     environmentId,
     threadId: thread.id,
+    ...(thread.latestRunId ? { runId: thread.latestRunId } : {}),
     projectTitle: project.title,
     threadTitle: thread.title,
     phase,

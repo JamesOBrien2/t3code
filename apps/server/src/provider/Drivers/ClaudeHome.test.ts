@@ -56,4 +56,33 @@ it.layer(NodeServices.layer)("ClaudeHome", (it) => {
       }),
     );
   });
+
+  describe("Claude entrypoint label", () => {
+    it.effect("labels traffic the Agent SDK would otherwise mark as sdk-*", () =>
+      Effect.gen(function* () {
+        expect((yield* makeClaudeEnvironment({ homePath: "" }, {})).CLAUDE_CODE_ENTRYPOINT).toBe(
+          "t3-code",
+        );
+        for (const inherited of ["sdk-ts", "sdk-cli", "  sdk-ts  ", ""]) {
+          const environment = yield* makeClaudeEnvironment(
+            { homePath: "" },
+            { CLAUDE_CODE_ENTRYPOINT: inherited },
+          );
+          expect(environment.CLAUDE_CODE_ENTRYPOINT).toBe("t3-code");
+        }
+      }),
+    );
+
+    it.effect("keeps a custom entrypoint and labels a configured home", () =>
+      Effect.gen(function* () {
+        const path = yield* Path.Path;
+        const environment = yield* makeClaudeEnvironment(
+          { homePath: "~/.claude-work" },
+          { CLAUDE_CODE_ENTRYPOINT: "claude-desktop" },
+        );
+        expect(environment.CLAUDE_CODE_ENTRYPOINT).toBe("claude-desktop");
+        expect(environment.CLAUDE_CONFIG_DIR).toBe(path.resolve(NodeOS.homedir(), ".claude-work"));
+      }),
+    );
+  });
 });

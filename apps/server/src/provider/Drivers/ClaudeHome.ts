@@ -27,16 +27,26 @@ export const resolveClaudeHomePath = Effect.fn("resolveClaudeHomePath")(function
   return path.resolve(path.join(home, ".claude"));
 });
 
+/** Anthropic charges `sdk-*` traffic about 1.8x more of the 5h window than CLI traffic for the same tokens. */
+const CLAUDE_ENTRYPOINT = "t3-code";
+
+/** The Agent SDK labels anything unset as `sdk-ts`, and inherits a parent agent's `sdk-*` label. */
+const labelClaudeEntrypoint = (environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
+  const inherited = environment.CLAUDE_CODE_ENTRYPOINT?.trim() ?? "";
+  if (inherited.length > 0 && !inherited.startsWith("sdk-")) return environment;
+  return { ...environment, CLAUDE_CODE_ENTRYPOINT: CLAUDE_ENTRYPOINT };
+};
+
 export const makeClaudeEnvironment = Effect.fn("makeClaudeEnvironment")(function* (
   config: Pick<ClaudeSettings, "homePath">,
   baseEnv?: NodeJS.ProcessEnv,
 ): Effect.fn.Return<NodeJS.ProcessEnv, never, Path.Path> {
-  const resolvedBaseEnv = baseEnv ?? process.env;
+  const environment = labelClaudeEntrypoint(baseEnv ?? process.env);
   const homePath = config.homePath.trim();
-  if (homePath.length === 0) return resolvedBaseEnv;
+  if (homePath.length === 0) return environment;
   const resolvedHomePath = yield* resolveClaudeHomePath(config);
   return {
-    ...resolvedBaseEnv,
+    ...environment,
     // Changing HOME hides macOS Keychain credentials; use CLAUDE_CONFIG_DIR to keep login access.
     CLAUDE_CONFIG_DIR: resolvedHomePath,
   };
